@@ -74,12 +74,23 @@ export default function OperationsPlanPage() {
   const [plan, setPlan] = useState<OperationsPlanResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [approvalMsg, setApprovalMsg] = useState<string | null>(null)
+  const [overrideConfirmed, setOverrideConfirmed] = useState(false)
+  const [showFullExplanation, setShowFullExplanation] = useState(false)
+
+  const hasAdversePlan = Boolean(
+    plan?.metrics && (
+      plan.metrics.wait_reduction_minutes <= 0 ||
+      (plan.unscheduled && plan.unscheduled.length > 0)
+    )
+  )
 
   const generatePlan = useCallback(() => {
     setPlanStatus('loading')
     setError(null)
     setApprovalStatus('idle')
     setApprovalMsg(null)
+    setOverrideConfirmed(false)
+    setShowFullExplanation(false)
     fetchOperationsPlan({ port_code: portCode, horizon_hours: 72 })
       .then(p => {
         setPlan(p)
@@ -199,6 +210,52 @@ export default function OperationsPlanPage() {
             </div>
           )}
 
+          {/* Adverse / Incomplete plan warning banner */}
+          {hasAdversePlan && approvalStatus !== 'approved' && (
+            <div
+              className="rounded-lg border border-red-700/60 bg-red-950/30 p-4"
+              data-testid="plan-adverse-warning"
+            >
+              <div className="flex items-start gap-3">
+                <span className="text-red-400 text-base shrink-0">⚠️</span>
+                <div className="space-y-2 flex-1">
+                  <div>
+                    <h4 className="text-red-300 font-semibold text-sm">
+                      Adverse or Incomplete Plan Detected
+                    </h4>
+                    <p className="text-slate-400 text-xs mt-0.5">
+                      The generated optimization proposal has limitations that may impact port efficiency:
+                    </p>
+                  </div>
+                  <ul className="text-red-300 text-xs list-disc list-inside space-y-1 bg-red-900/20 p-2.5 rounded border border-red-800/40">
+                    {plan.metrics && plan.metrics.wait_reduction_minutes <= 0 && (
+                      <li>
+                        <strong>Zero or Negative Wait Reduction ({fmtMinutes(plan.metrics.wait_reduction_minutes)}):</strong> Approving this plan offers no wait reduction over baseline FIFO.
+                      </li>
+                    )}
+                    {plan.unscheduled.length > 0 && (
+                      <li>
+                        <strong>{plan.unscheduled.length} Unscheduled Vessels:</strong> Only {plan.metrics?.scheduled_count ?? 0} of {plan.metrics?.total_vessels ?? 0} vessels could be scheduled in this horizon.
+                      </li>
+                    )}
+                  </ul>
+                  <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      data-testid="override-checkbox"
+                      checked={overrideConfirmed}
+                      onChange={e => setOverrideConfirmed(e.target.checked)}
+                      className="rounded border-red-600 bg-slate-900 text-teal-500 focus:ring-teal-500 w-4 h-4"
+                    />
+                    <span className="text-amber-200 text-xs font-medium">
+                      I have reviewed the adverse impact / unscheduled vessel count and acknowledge manual approval.
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Human approval gate */}
           <div
             className={`rounded-lg border p-4 ${
@@ -223,13 +280,21 @@ export default function OperationsPlanPage() {
                 </p>
               </div>
               {approvalStatus !== 'approved' && (
-                <button
-                  onClick={handleApprove}
-                  disabled={approvalStatus === 'loading'}
-                  className="px-4 py-1.5 bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-medium rounded transition-colors whitespace-nowrap"
-                >
-                  {approvalStatus === 'loading' ? 'Recording…' : '✓ Approve Plan'}
-                </button>
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    data-testid="approve-plan-btn"
+                    onClick={handleApprove}
+                    disabled={approvalStatus === 'loading' || (hasAdversePlan && !overrideConfirmed)}
+                    className="px-4 py-1.5 bg-amber-700 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors whitespace-nowrap"
+                  >
+                    {approvalStatus === 'loading' ? 'Recording…' : '✓ Approve Plan'}
+                  </button>
+                  {hasAdversePlan && !overrideConfirmed && (
+                    <span className="text-[10px] text-amber-400">
+                      Override acknowledgment required
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -237,10 +302,26 @@ export default function OperationsPlanPage() {
           {/* Explanation */}
           {plan.explanation && (
             <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4">
-              <h3 className="text-slate-300 font-medium text-sm mb-2">Optimiser Explanation</h3>
-              <pre className="text-slate-400 text-xs whitespace-pre-wrap leading-relaxed font-sans">
-                {plan.explanation}
-              </pre>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-slate-200 font-medium text-sm">Optimiser Decision Summary</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowFullExplanation(prev => !prev)}
+                  className="text-xs text-teal-400 hover:text-teal-300 font-medium transition-colors"
+                >
+                  {showFullExplanation ? 'Hide Full Diagnostics ▲' : 'View Full Solver Output ▼'}
+                </button>
+              </div>
+              <div className="text-slate-300 text-xs space-y-2">
+                <p className="leading-relaxed bg-slate-900/40 p-2.5 rounded border border-slate-700/50">
+                  {plan.explanation.split('\n\n')[0] || plan.explanation.slice(0, 200)}
+                </p>
+                {showFullExplanation && (
+                  <pre className="text-slate-400 text-[11px] whitespace-pre-wrap leading-relaxed font-mono bg-slate-900/60 p-3 rounded border border-slate-700 mt-2 max-h-72 overflow-y-auto">
+                    {plan.explanation}
+                  </pre>
+                )}
+              </div>
             </div>
           )}
 

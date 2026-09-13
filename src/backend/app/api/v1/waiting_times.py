@@ -24,6 +24,7 @@ from ...models.historical_operation import HistoricalOperation
 from ...models.port import Port
 from ...models.vessel import Vessel
 from ...models.vessel_schedule import VesselSchedule
+from ...services.congestion import _SCENARIO_MULTIPLIER
 from ...schemas.dashboard import (
     VesselWaitingPrediction,
     WaitingTimesResponse,
@@ -70,6 +71,7 @@ def get_waiting_times(
     port_code: str = Query(default=_DEFAULT_PORT, description="Port code (e.g. FKPFL)"),
     horizon_hours: int = Query(default=72, ge=6, le=168, description="Horizon in hours"),
     mode: str = Query(default="baseline", description="baseline | ml"),
+    scenario: str = Query(default="baseline", description="Scenario filter"),
     db: Session = Depends(get_db),
 ) -> WaitingTimesResponse:
     """
@@ -208,9 +210,10 @@ def get_waiting_times(
         if hasattr(eta_dt, "replace") and eta_dt.tzinfo is None:
             eta_dt = eta_dt.replace(tzinfo=timezone.utc)
 
+        multiplier = _SCENARIO_MULTIPLIER.get(scenario, 1.0)
         if mode == "baseline":
             wait_min = waiting_by_sched.get(row.sched_id, 0)
-            predicted_hours = round(wait_min / 60.0, 4)
+            predicted_hours = round((wait_min / 60.0) * multiplier, 4)
             model_version = WAITING_METHOD_BASELINE
         else:
             # mode == "ml"
@@ -228,7 +231,7 @@ def get_waiting_times(
                 "total_berths": total_berths,
                 "total_cranes": total_cranes,
                 "cargo_type": str(row.cargo_type) if row.cargo_type else "containerised",
-                "scenario": "baseline",
+                "scenario": scenario,
             }
             result = predictor.predict(feature_dict)
             predicted_hours = result.predicted_waiting_hours
@@ -261,4 +264,5 @@ def get_waiting_times(
         vessels=vessels,
         total=len(vessels),
         calculation_method=calculation_method,
+        scenario=scenario,
     )

@@ -255,6 +255,7 @@ class WaitingTimesResponse(BaseModel):
     is_synthetic: bool = True
     data_source: str = "synthetic"
     calculation_method: str
+    scenario: Optional[str] = "baseline"
     limitations: str = WAITING_LIMITATIONS
 
 

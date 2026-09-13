@@ -166,6 +166,8 @@ export default function DashboardPage() {
     copilotError: null,
   })
 
+  const [copilotValidation, setCopilotValidation] = useState<string | null>(null)
+
   const load = useCallback(
     async (sc: ScenarioId, cMode: CongestionMode, wMode: WaitingMode) => {
     setState(prev => ({ ...prev, status: 'loading', error: null }))
@@ -175,7 +177,7 @@ export default function DashboardPage() {
         fetchDashboardCongestion(portCode, sc, 72, cMode),
         fetchSchedules(portCode, sc),
         fetchBerths(portCode),
-        fetchWaitingTimes(portCode, 72, wMode),
+        fetchWaitingTimes(portCode, 72, wMode, sc),
       ])
       const isEmpty =
         summary.active_vessel_count === 0 && congestion.windows.length === 0
@@ -197,7 +199,7 @@ export default function DashboardPage() {
       // Fire alternate-routing fetch for highest-wait vessel (non-blocking)
       if (!isEmpty && waitingTimes.vessels.length > 0) {
         const topVessel = waitingTimes.vessels[0]
-        fetchAlternateRouting(topVessel.vessel_id)
+        fetchAlternateRouting(topVessel.vessel_id, topVessel.schedule_id, sc)
           .then(routing => setState(prev => ({ ...prev, routing, routingError: null })))
           .catch(() =>
             setState(prev => ({
@@ -224,9 +226,18 @@ export default function DashboardPage() {
   }, [portCode])
 
   const askCopilot = useCallback((question: string) => {
-    if (!question.trim() || question.trim().length < 3) return
+    const trimmed = question.trim()
+    if (!trimmed) {
+      setCopilotValidation('Please enter a question before asking.')
+      return
+    }
+    if (trimmed.length < 3) {
+      setCopilotValidation('Question must be at least 3 characters.')
+      return
+    }
+    setCopilotValidation(null)
     setState(prev => ({ ...prev, copilotLoading: true, copilotError: null }))
-    fetchCopilotAsk({ port_code: portCode, question: question.trim(), scenario })
+    fetchCopilotAsk({ port_code: portCode, question: trimmed, scenario })
       .then(copilotResponse =>
         setState(prev => ({ ...prev, copilotResponse, copilotLoading: false }))
       )
@@ -794,24 +805,36 @@ export default function DashboardPage() {
         </div>
 
         {/* Text input */}
-        <div className="flex gap-2 mb-3">
-          <input
-            data-testid="copilot-input"
-            type="text"
-            value={copilotQuestion}
-            onChange={e => setCopilotQuestion(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') askCopilot(copilotQuestion) }}
-            placeholder="Ask about current port conditions…"
-            className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-          />
-          <button
-            data-testid="copilot-ask-btn"
-            onClick={() => askCopilot(copilotQuestion)}
-            disabled={copilotLoading}
-            className="px-4 py-1.5 bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-white text-xs rounded transition-colors"
-          >
-            {copilotLoading ? 'Asking…' : 'Ask'}
-          </button>
+        <div className="space-y-1 mb-3">
+          <div className="flex gap-2">
+            <input
+              data-testid="copilot-input"
+              type="text"
+              value={copilotQuestion}
+              onChange={e => {
+                setCopilotQuestion(e.target.value)
+                if (copilotValidation && e.target.value.trim().length >= 3) {
+                  setCopilotValidation(null)
+                }
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') askCopilot(copilotQuestion) }}
+              placeholder="Ask about current port conditions…"
+              className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            />
+            <button
+              data-testid="copilot-ask-btn"
+              onClick={() => askCopilot(copilotQuestion)}
+              disabled={copilotLoading || !copilotQuestion.trim()}
+              className="px-4 py-1.5 bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs rounded transition-colors"
+            >
+              {copilotLoading ? 'Asking…' : 'Ask'}
+            </button>
+          </div>
+          {copilotValidation && (
+            <p className="text-amber-400 text-[11px]" data-testid="copilot-validation">
+              {copilotValidation}
+            </p>
+          )}
         </div>
 
         {/* Response area */}

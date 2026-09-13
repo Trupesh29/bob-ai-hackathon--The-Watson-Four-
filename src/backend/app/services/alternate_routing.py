@@ -173,9 +173,20 @@ def _handling_hours(expected_containers: int) -> float:
     return round(expected_containers / (_AVG_MOVES_PER_HOUR * 2), 2)
 
 
+_SCENARIO_MULTIPLIER: dict[str, float] = {
+    "baseline": 1.0,
+    "arrival_surge": 1.5,
+    "crane_outage": 1.3,
+    "berth_closure": 1.4,
+    "handling_slowdown": 1.2,
+}
+
+
 def compute_alternate_routing(
     db: Session,
     vessel_id_str: str,
+    schedule_id_str: Optional[str] = None,
+    scenario: str = "baseline",
 ) -> Optional[AlternateRoutingResult]:
     """
     Compute alternate-routing recommendation for a given vessel.
@@ -196,27 +207,57 @@ def compute_alternate_routing(
 
     # ── 2. Schedule — cast UUID FKs to String to avoid SQLite UUID type issues ─
     # UUIDs in tests use uuid5/uuid4 (non-degenerate) so the cast is stable.
-    sched_stmt = (
-        _sa_select(
-            _sa_cast(VesselSchedule.id, _SAStr).label("sched_id_hex"),
-            _sa_cast(VesselSchedule.port_id, _SAStr).label("port_id_hex"),
-            VesselSchedule.expected_containers,
-        )
-        .where(
-            VesselSchedule.vessel_id == vessel_uuid,
-            VesselSchedule.is_synthetic == True,  # noqa: E712
-        )
-        .order_by(VesselSchedule.eta)
-        .limit(1)
-    )
-    sched_row = db.execute(sched_stmt).first()
-    if sched_row is None:
-        return _no_schedule_result(vessel_id_str, vessel_name)
-
-    # Normalise: SQLite returns 32-char hex; PostgreSQL returns hyphenated UUID string
     def _to_uuid(s: str) -> _uuid_mod.UUID:
         s = s.replace("-", "")
         return _uuid_mod.UUID(hex=s)
+
+    sched_row = None
+    if schedule_id_str:
+        try:
+            target_sched_uuid = _parse_uuid(schedule_id_str)
+            sched_stmt = (
+                _sa_select(
+                    _sa_cast(VesselSchedule.id, _SAStr).label("sched_id_hex"),
+                    _sa_cast(VesselSchedule.port_id, _SAStr).label("port_id_hex"),
+                    VesselSchedule.expected_containers,
+                )
+                .where(
+                    VesselSchedule.id == target_sched_uuid,
+                    VesselSchedule.is_synthetic == True,  # noqa: E712
+                )
+                .limit(1)
+            )
+            sched_row = db.execute(sched_stmt).first()
+        except ValueError:
+            sched_row = None
+
+    if sched_row is None:
+        # Check for schedule with highest historical waiting time first
+        sched_stmt = (
+            _sa_select(
+                _sa_cast(VesselSchedule.id, _SAStr).label("sched_id_hex"),
+                _sa_cast(VesselSchedule.port_id, _SAStr).label("port_id_hex"),
+                VesselSchedule.expected_containers,
+            )
+            .join(
+                HistoricalOperation,
+                HistoricalOperation.schedule_id == VesselSchedule.id,
+                isouter=True,
+            )
+            .where(
+                VesselSchedule.vessel_id == vessel_uuid,
+                VesselSchedule.is_synthetic == True,  # noqa: E712
+            )
+            .order_by(
+                HistoricalOperation.waiting_minutes.desc().nullslast(),
+                VesselSchedule.eta.asc(),
+            )
+            .limit(1)
+        )
+        sched_row = db.execute(sched_stmt).first()
+
+    if sched_row is None:
+        return _no_schedule_result(vessel_id_str, vessel_name)
 
     sched_uuid = _to_uuid(sched_row.sched_id_hex)
     port_uuid = _to_uuid(sched_row.port_id_hex)
@@ -228,14 +269,16 @@ def compute_alternate_routing(
     port_code = str(port_row.code) if port_row else "FKPFL"
     port_name = str(port_row.name) if port_row else "Port of Falkermere"
 
-    # ── 4. Current-port wait (baseline historical) ────────────────────────────
+    # ── 4. Current-port wait (baseline historical * scenario multiplier) ──────
     op_stmt = (
         _sa_select(HistoricalOperation.waiting_minutes)
         .where(HistoricalOperation.schedule_id == sched_uuid)
         .limit(1)
     )
     op_row = db.execute(op_stmt).first()
-    current_wait_hours = round((op_row.waiting_minutes / 60.0) if op_row else 0.0, 4)
+    base_wait_hours = round((op_row.waiting_minutes / 60.0) if op_row else 0.0, 4)
+    multiplier = _SCENARIO_MULTIPLIER.get(scenario, 1.0)
+    current_wait_hours = round(base_wait_hours * multiplier, 4)
 
     # ── 5. Current-port handling estimate ─────────────────────────────────────
     current_handling = _handling_hours(expected_containers)

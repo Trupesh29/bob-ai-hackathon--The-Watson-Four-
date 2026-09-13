@@ -21,7 +21,8 @@ See service module for full limitations and assumptions.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ...dependencies import get_db
@@ -86,6 +87,8 @@ def _result_to_response(result: AlternateRoutingResult) -> AlternateRoutingRespo
 )
 def get_alternate_routing(
     vessel_id: str,
+    schedule_id: Optional[str] = Query(default=None, description="Optional schedule ID"),
+    scenario: str = Query(default="baseline", description="Scenario ID"),
     db: Session = Depends(get_db),
 ) -> AlternateRoutingResponse:
     """
@@ -94,7 +97,12 @@ def get_alternate_routing(
     Raises 404 when vessel_id is not found in the database.
     Always returns 200 even when no diversion is recommended (recommended=False).
     """
-    result = compute_alternate_routing(db, vessel_id_str=vessel_id)
+    result = compute_alternate_routing(
+        db,
+        vessel_id_str=vessel_id,
+        schedule_id_str=schedule_id,
+        scenario=scenario,
+    )
     if result is None:
         raise HTTPException(
             status_code=404,

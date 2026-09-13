@@ -47,6 +47,7 @@ from ..schemas.copilot import (
 from ..services.congestion import (
     compute_dashboard_summary,
     compute_congestion_horizon,
+    _SCENARIO_MULTIPLIER,
 )
 from ..schemas.dashboard import VALID_SCENARIOS
 
@@ -90,8 +91,8 @@ def build_context(
             top_drivers = w.rule_drivers[:3]
             break
 
-    # ── 3. Waiting-times — top vessel info (baseline) ─────────────────────────
-    wt_info = _waiting_context(db, port_code=port_code)
+    # ── 3. Waiting-times — top vessel info (scenario-aware) ───────────────────
+    wt_info = _waiting_context(db, port_code=port_code, scenario=scenario)
 
     # ── 4. Alternate-routing for top vessel ───────────────────────────────────
     routing_recommended: Optional[bool] = None
@@ -99,10 +100,15 @@ def build_context(
     if wt_info and wt_info.get("top_schedule_id"):
         try:
             from ..services.alternate_routing import compute_alternate_routing
-            # Use vessel_id from the top waiting vessel's schedule
             vessel_id_str = wt_info.get("top_vessel_id")
+            sched_id_str = wt_info.get("top_schedule_id")
             if vessel_id_str:
-                ar = compute_alternate_routing(db, vessel_id_str=vessel_id_str)
+                ar = compute_alternate_routing(
+                    db,
+                    vessel_id_str=vessel_id_str,
+                    schedule_id_str=sched_id_str,
+                    scenario=scenario,
+                )
                 if ar:
                     routing_recommended = ar.recommended
                     routing_reason = ar.reason
@@ -130,9 +136,9 @@ def build_context(
 
 # ── Waiting-times context helper ─────────────────────────────────────────────
 
-def _waiting_context(db: Session, port_code: str) -> Optional[dict]:
+def _waiting_context(db: Session, port_code: str, scenario: str = "baseline") -> Optional[dict]:
     """
-    Pull waiting-time data for the top vessel (baseline mode).
+    Pull waiting-time data for the top vessel.
 
     Returns a dict with selected fields or None on error.
     Defined at module level (imported via 'from ..services import _waiting_context').
@@ -181,7 +187,7 @@ def _waiting_context(db: Session, port_code: str) -> Optional[dict]:
             .all()
         )
 
-        # Schedules
+        # Schedules — scan all schedules in horizon (same as waiting_times endpoint)
         schedule_rows = (
             db.query(
                 sa_cast(VesselSchedule.id, SAStr).label("sched_id"),
@@ -198,7 +204,6 @@ def _waiting_context(db: Session, port_code: str) -> Optional[dict]:
                 VesselSchedule.is_synthetic == True,  # noqa: E712
             )
             .order_by(VesselSchedule.eta)
-            .limit(20)
             .all()
         )
 
@@ -214,6 +219,7 @@ def _waiting_context(db: Session, port_code: str) -> Optional[dict]:
         )
         waiting_by_sched: dict[str, int] = {r.sched_id: r.waiting_minutes for r in waiting_rows}
 
+        multiplier = _SCENARIO_MULTIPLIER.get(scenario, 1.0)
         vessels = []
         for idx, row in enumerate(schedule_rows):
             compat = sum(
@@ -223,7 +229,7 @@ def _waiting_context(db: Session, port_code: str) -> Optional[dict]:
             )
             queue = idx
             wait_min = waiting_by_sched.get(row.sched_id, 0)
-            hours = round(wait_min / 60.0, 4)
+            hours = round((wait_min / 60.0) * multiplier, 4)
             risk = waiting_risk_level(hours)
             # primary cause
             cause: Optional[str] = None

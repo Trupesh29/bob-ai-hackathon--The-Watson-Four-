@@ -24,11 +24,11 @@ import type {
   WaitingTimesResponse,
 } from '../types/api'
 
-const BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'
+const rawBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
+const BASE_URL = rawBase && rawBase.length > 0 ? rawBase : '/api/v1'
 
-export const DEFAULT_PORT_CODE =
-  (import.meta.env.VITE_DEFAULT_PORT_ID as string | undefined) ?? 'FKPFL'
+const rawPort = (import.meta.env.VITE_DEFAULT_PORT_ID as string | undefined)?.trim()
+export const DEFAULT_PORT_CODE = rawPort && rawPort.length > 0 ? rawPort : 'FKPFL'
 
 // ── Error type ───────────────────────────────────────────────────────────────
 
@@ -126,18 +126,29 @@ export function fetchWaitingTimes(
   portCode: string,
   horizonHours = 72,
   mode: WaitingMode = 'baseline',
+  scenario?: string,
 ): Promise<WaitingTimesResponse> {
-  return apiFetch<WaitingTimesResponse>('/waiting-times', {
+  const params: Record<string, string | number> = {
     port_code: portCode,
     horizon_hours: horizonHours,
     mode,
-  })
+  }
+  if (scenario) params.scenario = scenario
+  return apiFetch<WaitingTimesResponse>('/waiting-times', params)
 }
 
 export function fetchAlternateRouting(
   vesselId: string,
+  scheduleId?: string,
+  scenario?: string,
 ): Promise<AlternateRoutingResponse> {
-  return apiFetch<AlternateRoutingResponse>(`/vessels/${encodeURIComponent(vesselId)}/alternate-routing`)
+  const params: Record<string, string> = {}
+  if (scheduleId) params.schedule_id = scheduleId
+  if (scenario) params.scenario = scenario
+  return apiFetch<AlternateRoutingResponse>(
+    `/vessels/${encodeURIComponent(vesselId)}/alternate-routing`,
+    params,
+  )
 }
 
 export function fetchCopilotAsk(

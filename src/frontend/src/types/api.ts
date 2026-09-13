@@ -332,4 +332,5 @@ export interface OperationsPlanRequest {
   port_code?: string
   horizon_hours?: number
   solve_limit_seconds?: number
+  scenario?: string
 }
