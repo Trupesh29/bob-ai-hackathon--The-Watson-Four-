@@ -1,8 +1,8 @@
 # Setup Guide — PortFlow AI
 
-> **Status (Plan 2):** Backend and frontend skeleton are implemented.
-> The health endpoint is functional.  Database, ML, and optimiser code is
-> not yet implemented (Plans 3–5).
+> **Status (Plan 3):** FastAPI health endpoint, SQLAlchemy ORM models, Alembic migrations,
+> and synthetic data generator are implemented.
+> ML pipeline and OR-Tools optimiser are not yet implemented (Plans 4–5).
 > Repository URL is pending (see `submission.yaml`).
 
 ---
@@ -80,35 +80,40 @@ cp .env.example .env
 Edit `src/backend/.env` and set at minimum:
 
 ```ini
-DATABASE_URL=postgresql://portflow:portflow_dev@localhost:5432/portflow
-SECRET_KEY=<generate with: python -c "import secrets; print(secrets.token_hex(32))">
-ENVIRONMENT=development
-RANDOM_SEED=42
-REROUTE_THRESHOLD=0.7
+DATABASE_URL=postgresql+psycopg://portflow:change-me@localhost:5432/portflow
+APP_ENV=development
+SYNTHETIC_DATA_SEED=2026
 ```
 
-**Required environment variables:**
+**Required environment variables (Plan 3+):**
 
 | Variable | Description | Default |
 |---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | — (required) |
-| `SECRET_KEY` | JWT signing key | — (required) |
-| `ENVIRONMENT` | `development` or `production` | `development` |
-| `RANDOM_SEED` | Seed for synthetic data generation and ML reproducibility | `42` |
-| `REROUTE_THRESHOLD` | Congestion risk score threshold for routing recommendations | `0.7` |
+| `DATABASE_URL` | PostgreSQL psycopg3 connection string | — (required) |
+| `APP_ENV` | `development`, `test`, or `production` | `development` |
+| `SYNTHETIC_DATA_SEED` | Seed for reproducible synthetic data generation | `2026` |
 
 ```bash
-# Run database migrations (Plan 3+)
-# alembic upgrade head
+# Create the PostgreSQL database (if not using Docker)
+createdb -U portflow portflow
 
-# Seed synthetic data (Plan 4+)
-# python -m app.data.seed
+# Run database migrations (from src/)
+python -m alembic -c database/alembic.ini upgrade head
+
+# Verify migration applied
+python -m alembic -c database/alembic.ini current
+
+# Seed synthetic demo data (from src/) — safe to run multiple times
+python -m data.seed
+
+# Re-seed from scratch (dev/test only)
+python -m data.seed --reset
 
 # Start the backend API server (from src/)
 python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Health check (Plan 2 and later):**
+**Health check:**
 
 ```bash
 curl http://localhost:8000/api/v1/health
@@ -233,9 +238,13 @@ Root directory: src/frontend
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `alembic upgrade head` fails | `DATABASE_URL` not set or DB not running | Check `.env` and confirm PostgreSQL is reachable |
-| `ModuleNotFoundError` on backend start | Virtual environment not activated | Run `.venv\Scripts\Activate.ps1` (Windows) or `source .venv/bin/activate` |
-| `VITE_API_URL` not applied | `.env` file missing in `src/frontend/` | Copy `.env.example` to `.env` and restart `npm run dev` |
-| Model `.joblib` file missing | Training script not run | Run `python -m app.ml.train` |
-| Port 8000 already in use | Another process bound to 8000 | `uvicorn app.main:app --port 8001` and update `VITE_API_URL` |
-| CP-SAT solver returns INFEASIBLE | Constraint conflict in test data | Check that berth count ≥ concurrent vessel arrivals in seed data |
+| `alembic upgrade head` fails | `DATABASE_URL` not set or DB not running | Check `src/backend/.env` and confirm PostgreSQL is reachable via `psql $DATABASE_URL` |
+| `sqlalchemy.exc.OperationalError: connection refused` | PostgreSQL not started | `docker start portflow-postgres` or `pg_ctl start` |
+| `role "portflow" does not exist` | PostgreSQL user not created | Run `createuser -s portflow` then `createdb -U portflow portflow` |
+| `ModuleNotFoundError` on backend start | Virtual environment not activated or wrong dir | Activate `src/.venv` and run from `src/` |
+| `ModuleNotFoundError: No module named 'data'` | Running `seed.py` from wrong directory | Run `python -m data.seed` from `src/`, not `src/data/` |
+| `python -m alembic` not found | Alembic not installed | Run `pip install -r src/backend/requirements.txt` |
+| Migration `revision not found` | Running alembic from wrong directory | Always run `python -m alembic -c database/alembic.ini ...` from `src/` |
+| `seed --reset` blocked in production | APP_ENV is not `development` or `test` | Only use `--reset` in dev/test environments |
+| `VITE_API_BASE_URL` not applied | `.env` file missing in `src/frontend/` | Copy `.env.example` to `.env` and restart `npm run dev` |
+| Port 8000 already in use | Another process bound to 8000 | `python -m uvicorn backend.app.main:app --port 8001` and update `VITE_API_BASE_URL` |

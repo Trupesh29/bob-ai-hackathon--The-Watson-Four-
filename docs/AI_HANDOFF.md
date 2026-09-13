@@ -236,30 +236,136 @@ Plan 2 creates the minimal, honest, no-fake-data application skeleton.
 
 ---
 
-## Next Task — Plan 3
+## Next Task — Plan 3 ✅ COMPLETED — see Plan 3 session below
 
-**Goal:** Implement SQLAlchemy ORM models, Alembic initial migration, and Pydantic
-v2 request/response schemas.  No endpoint handlers yet.
+---
+
+## Session: Plan 3 — Database Foundation and Synthetic Data
+
+**Date:** 2026-09-13
+**Goal:** Implement the PostgreSQL database foundation and deterministic synthetic
+demo dataset for the PortFlow vertical slice.
+
+### Context
+
+Plans 1 and 2 established documentation and the application skeleton.
+Plan 3 implements the 6 MVP tables, Alembic migration, session factory,
+and synthetic data generator with 5 scenarios.
+
+### Completed Work
+
+| File | Action | Notes |
+|---|---|---|
+| `src/backend/app/core/config.py` | Updated | Added `synthetic_data_seed` field; changed default `database_url` placeholder password to `change-me` |
+| `src/backend/app/dependencies.py` | Created | `get_db()` session dependency; `get_engine()`; `pool_pre_ping=True`; no credential logging |
+| `src/backend/app/models/base.py` | Created | `DeclarativeBase` subclass `Base` |
+| `src/backend/app/models/port.py` | Created | `Port` model; unique `code`; lat/lon CHECK constraints |
+| `src/backend/app/models/vessel.py` | Created | `Vessel` model; unique `imo_number`; dimension CHECK constraints |
+| `src/backend/app/models/berth.py` | Created | `Berth` model; composite unique `(port_id, code)`; dimension/crane CHECK constraints; `ix_berths_port_status` index |
+| `src/backend/app/models/crane.py` | Created | `Crane` model; composite unique `(port_id, code)`; `moves_per_hour > 0` CHECK; nullable `berth_id` for movable cranes; `ix_cranes_port_status` index |
+| `src/backend/app/models/vessel_schedule.py` | Created | `VesselSchedule` model; `priority` CHECK [1,5]; `ix_vs_port_eta` and `ix_vs_vessel_eta` indexes; `is_synthetic` flag |
+| `src/backend/app/models/historical_operation.py` | Created | `HistoricalOperation` model; `waiting_minutes >= 0`; `service_minutes > 0`; `actual_departure >= actual_arrival` CHECK; one-to-one with `VesselSchedule` via `unique=True`; `ix_ho_schedule_id` index |
+| `src/backend/app/models/__init__.py` | Updated | Imports all 6 models so Alembic sees all metadata |
+| `src/database/alembic.ini` | Created | Alembic config; `DATABASE_URL` injected from settings in `env.py`; never stored in ini |
+| `src/database/migrations/env.py` | Created | Imports all models; injects `settings.database_url`; supports offline and online modes |
+| `src/database/migrations/script.py.mako` | Created | Alembic revision template |
+| `src/database/migrations/versions/0001_initial_schema.py` | Created | Complete initial migration: all 6 tables, all indexes, all constraints; safe `downgrade()` |
+| `src/data/__init__.py` | Created | Package marker |
+| `src/data/generator.py` | Created | `SyntheticDataset` class; 5 scenarios; per-scenario isolated RNG; causal realism; vessel–berth compatibility enforced; fictional names and IMOs |
+| `src/data/seed.py` | Created | Idempotent seeder via `session.merge()`; `--reset` blocked outside dev/test; prints record counts only |
+| `src/backend/tests/test_database.py` | Created | 14 tests (13 pure Python in-memory, 1 PostgreSQL integration skipped if unavailable) |
+| `src/pytest.ini` | Updated | Added `addopts = -q` |
+| `src/.env.example` | Updated | Added key variable index |
+| `src/backend/.env.example` | Updated | Added `SYNTHETIC_DATA_SEED=2026`; changed password placeholder to `change-me` |
+| `src/README.md` | Updated | Full directory structure, all commands, synthetic data disclosure |
+| `docs/setup-guide.md` | Updated | PostgreSQL prereqs, Docker setup, migration commands, seed command, troubleshooting |
+| `docs/submission-readiness.md` | Updated | Plan 3 items marked Complete; backend test count updated to 16/1-skipped |
+
+### Validation Performed
+
+| Check | Result |
+|---|---|
+| `python -m pytest backend/tests/ -v` (from `src/`) | ✅ **16 passed, 1 skipped** (PostgreSQL test skipped — no DB available) |
+| Health tests (subset) | ✅ 3 passed |
+| Database unit tests (1–11) | ✅ 11 passed |
+| Vessel–berth compatibility test (12) | ✅ Passed |
+| Congestion scenario test (13) | ✅ Passed (`arrival_surge` 946 min > `baseline` 50 min) |
+| PostgreSQL idempotency test (14) | ⏭ Skipped (no PostgreSQL available) |
+| All 14 required Bobathon paths | ✅ All present |
+| All source code under `src/` | ✅ |
+| No `.env` files committed | ✅ |
+| `validate.yml` unchanged | ✅ |
+| `git diff --check` | ✅ No trailing whitespace |
+
+### Synthetic Dataset Counts (seed=2026)
+
+| Entity | Count |
+|---|---|
+| Port | 1 (Port of Falkermere, code FKPFL) |
+| Berths | 3 (B01, B02, B03) |
+| Cranes | 7 (QC01–QC07) |
+| Vessels | 15 |
+| Schedules | 44 (8+12+8+8+8 across 5 scenarios) |
+| Historical operations | 44 |
+
+### Scenario Waiting Times
+
+| Scenario | Vessels | Avg wait (min) |
+|---|---|---|
+| baseline | 8 | 50 |
+| arrival_surge | 12 | 946 |
+| crane_outage | 8 | 1192 |
+| berth_closure | 8 | 661 |
+| handling_slowdown | 8 | 1648 |
+
+### Known Issues / Caveats
+
+1. **Python 3.14 runtime:** `.python-version` specifies 3.12 but only 3.14 is installed.
+   All code runs correctly on 3.14.  Recreate venv with Python 3.12 before final submission.
+
+2. **PostgreSQL integration test skipped:** Test 14 (`test_seed_idempotent_postgresql`)
+   requires `DATABASE_URL` pointing to a real PostgreSQL instance.  Set `DATABASE_URL`
+   in `src/backend/.env` to run this test.
+
+3. **`docs/DATA_DICTIONARY.md` describes a simpler schema** (from Plan 1, which used a
+   basic `vessels/berths/cranes` schema with VARCHAR PKs).  The Plan 3 schema uses a
+   richer model with `ports`, `vessel_schedules`, `historical_operations`, UUID PKs,
+   and timezone-aware timestamps.  The DATA_DICTIONARY.md should be updated in a future
+   session to match the implemented schema.  Existing API contract endpoints reference
+   the Plan 1 schema names — these will be reconciled in Plan 4 when CRUD handlers are built.
+
+4. **`berth_override_code` parameter** in `_gen_schedules` is unused after refactoring.
+   It was removed from the scenario configs but the parameter remains.  No functional impact.
+
+### Contract Changes
+
+| Change | Justification | Documented |
+|---|---|---|
+| Schema uses `ports`, `vessel_schedules`, `historical_operations` instead of Plan 1 DATA_DICTIONARY schema | Plan 3 spec requires a richer port-operations model with 6 specific tables | `docs/AI_HANDOFF.md` (this entry); `docs/DATA_DICTIONARY.md` update deferred to Plan 4 |
+| `expected_containers` in `vessel_schedules` represents crane moves per port call (not TEU loaded) | Causal realism requires a value that drives service duration at realistic crane rates | Generator comment in `src/data/generator.py` |
+| `SYNTHETIC_DATA_SEED` environment variable added (default `2026`) | Plan 3 spec requirement; replaces old `RANDOM_SEED` from Plan 1 | `src/backend/app/core/config.py`, `.env.example` files |
+
+---
+
+## Next Task — Plan 4
+
+**Goal:** Implement Pydantic v2 schemas and CRUD REST endpoints for vessels, berths,
+and vessel schedules.  Connect the database to the API.  No ML or CP-SAT yet.
 
 **Scope:**
-1. SQLAlchemy 2 declarative base (`src/backend/app/models/base.py`).
-2. All ORM models matching `docs/DATA_DICTIONARY.md`:
-   `vessels`, `berths`, `cranes`, `predictions`, `prediction_results`,
-   `plans`, `berth_assignments`, `crane_assignments`, `plan_approvals`,
-   `routing_recommendations`.
-3. Alembic configuration (`src/backend/alembic.ini` + `src/backend/alembic/env.py`).
-4. Initial Alembic revision generating the full schema.
-5. Pydantic v2 schemas for all API request/response objects in `docs/API_CONTRACT.md`.
-6. pytest tests confirming model fields and schema validation.
+1. Pydantic v2 request/response schemas for all entities in `docs/API_CONTRACT.md`.
+2. CRUD route handlers: `GET /api/v1/vessels`, `GET /api/v1/berths`, `GET /api/v1/ports`.
+3. Database session injection via `get_db()` dependency.
+4. Update `docs/DATA_DICTIONARY.md` to match the Plan 3 schema.
+5. pytest tests for at least the vessels and berths endpoints.
 
-**Before starting Plan 3, read:**
+**Before starting Plan 4, read:**
 - `docs/AI_HANDOFF.md` (this document)
-- `docs/DATA_DICTIONARY.md`
 - `docs/API_CONTRACT.md`
 - `docs/DEFINITION_OF_DONE.md`
+- `src/backend/app/models/` (all 6 model files)
 
-**Do NOT implement in Plan 3:**
-- Route handlers
+**Do NOT implement in Plan 4:**
 - ML pipeline
 - CP-SAT solver
-- Frontend changes
+- Frontend changes beyond API type updates

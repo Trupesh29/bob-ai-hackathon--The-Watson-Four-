@@ -34,7 +34,7 @@
 | Human approval required for routing/plans | ✅ Complete | Documented; `/operations-plan` route has approval gate UI stub |
 | No secrets or real credentials in source | ✅ Complete | Only `.env.example` files committed |
 | `GET /api/v1/health` returns exact contract response | ✅ Complete | `{"status":"healthy","service":"portflow-api","version":"0.1.0"}` |
-| Backend tests pass (`pytest backend/tests -q` from `src/`) | ✅ Complete | 3 passed, 0 failures |
+| Backend tests pass (`pytest backend/tests -v` from `src/`) | ✅ Complete | **16 passed, 1 skipped** (PG integration skipped — no DB in CI) |
 | Frontend production build passes (`npm run build` in `src/frontend/`) | ✅ Complete | Vite 6, 0 errors |
 | `npm audit` — 0 high-severity vulnerabilities | ✅ Complete | 0 vulnerabilities |
 
@@ -47,11 +47,14 @@
 | `src/backend/` — FastAPI app factory + health endpoint | ✅ Complete | Plan 2 |
 | `src/backend/` — pydantic-settings config, CORS, error envelope | ✅ Complete | Plan 2 |
 | `src/frontend/` — React + Vite + TS shell, all 7 routes | ✅ Complete | Plan 2 |
-| `src/backend/` — SQLAlchemy ORM models + Alembic migration | 🔲 Not started | Plan 3 |
-| `src/backend/` — Pydantic v2 request/response schemas | 🔲 Not started | Plan 3 |
+| `src/backend/app/models/` — 6 SQLAlchemy 2 ORM models | ✅ Complete | Plan 3 |
+| `src/backend/app/dependencies.py` — session factory | ✅ Complete | Plan 3 |
+| `src/database/migrations/` — Alembic initial migration | ✅ Complete | Plan 3 (rev `0001_initial_schema`) |
+| `src/data/generator.py` — synthetic data generator (5 scenarios) | ✅ Complete | Plan 3 |
+| `src/data/seed.py` — idempotent database seeder | ✅ Complete | Plan 3 |
+| `src/backend/` — Pydantic v2 request/response schemas | 🔲 Not started | Plan 4 |
 | `src/backend/` — CRUD route handlers | 🔲 Not started | Plan 4 |
 | `src/backend/` — scikit-learn ML pipeline + training | 🔲 Not started | Plan 4 |
-| `src/backend/` — synthetic data generation | 🔲 Not started | Plan 4 |
 | `src/backend/` — OR-Tools CP-SAT solver | 🔲 Not started | Plan 5 |
 | `src/frontend/` — real data connected to API | 🔲 Not started | Plan 5 |
 | `src/backend/` — PortFlow MCP server | 🔲 Not started | Plan 6 |

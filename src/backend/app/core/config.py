@@ -27,9 +27,9 @@ class Settings(BaseSettings):
     # API
     api_v1_prefix: str = "/api/v1"
 
-    # Database (declared; not connected in this plan)
+    # Database — read from environment; never logged
     database_url: str = (
-        "postgresql+psycopg://portflow:portflow@localhost:5432/portflow"
+        "postgresql+psycopg://portflow:change-me@localhost:5432/portflow"
     )
 
     # CORS — accepts a JSON-encoded list or a comma-separated string
@@ -37,6 +37,9 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
+
+    # Synthetic data
+    synthetic_data_seed: int = 2026
 
     def get_cors_origins(self) -> List[str]:
         """Return CORS origins as a Python list."""
