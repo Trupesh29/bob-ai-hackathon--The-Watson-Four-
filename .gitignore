@@ -1,0 +1,97 @@
+# -- Python --------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+src/.venv/
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+*.egg
+MANIFEST
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+.tox/
+
+# ML artefacts
+*.joblib
+*.pkl
+*.h5
+*.onnx
+*.pt
+*.pth
+models/*.bin
+
+# Generated / raw data (preserve intentional .gitkeep files)
+src/data/raw/*
+src/data/processed/*
+!src/data/raw/.gitkeep
+!src/data/processed/.gitkeep
+
+# Alembic auto-generated (keep versions/ itself but not compiled byte-code)
+src/backend/alembic/versions/__pycache__/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# -- Node / Frontend -----------------------------------------------------------
+node_modules/
+src/frontend/node_modules/
+src/frontend/dist/
+src/frontend/.next/
+src/frontend/build/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# -- Environment files (NEVER commit real secrets) -----------------------------
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+src/.env
+src/backend/.env
+src/frontend/.env
+*.env.local
+
+# -- OS / editor ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# -- Do NOT ignore submission-required directories -----------------------------
+# src/, demo/, presentation/, bob_sessions/ are always tracked
+
+# TypeScript build info
+*.tsbuildinfo
+src/frontend/tsconfig.*.tsbuildinfo

@@ -116,19 +116,20 @@ All application source code lives under `src/`.
 | Repository structure and documentation | ✅ Complete |
 | submission.yaml and README | ✅ Complete |
 | API contract, data dictionary, architecture docs | ✅ Complete |
-| `src/` application code | 🔲 Not started |
-| ML model training and serialisation | 🔲 Not started |
-| CP-SAT optimiser integration | 🔲 Not started |
-| Database migrations (Alembic) | 🔲 Not started |
-| Frontend React application | 🔲 Not started |
-| IBM Bob MCP server | 🔲 Not started |
+| FastAPI health endpoint (`GET /api/v1/health`) | ✅ Complete |
+| React + Vite + TS shell (7 routes, Tailwind, Router) | ✅ Complete |
+| Database ORM models + Alembic migrations | 🔲 Not started — Plan 3 |
+| ML model training and serialisation | 🔲 Not started — Plan 4 |
+| CP-SAT optimiser integration | 🔲 Not started — Plan 5 |
+| Frontend connected to real API data | 🔲 Not started — Plan 5 |
+| IBM Bob MCP server | 🔲 Not started — Plan 6 |
 | Demo video | 🔲 Not started |
 | Public deployment | 🔲 Not started |
 | Bob session exports (`bob_sessions/`) | 🔲 Not started |
 
 ---
 
-## Quick Start (once `src/` is implemented)
+## Quick Start
 
 See [`docs/setup-guide.md`](docs/setup-guide.md) for full prerequisites, environment variables, and troubleshooting.
 
@@ -137,24 +138,23 @@ See [`docs/setup-guide.md`](docs/setup-guide.md) for full prerequisites, environ
 git clone <REPOSITORY_URL_PENDING>
 cd bob-ai-hackathon-portflow-ai
 
-# Backend
-cd src/backend
+# Backend (run from src/)
+cd src
 python -m venv .venv
-.venv\Scripts\activate          # Windows
+.venv\Scripts\Activate.ps1      # Windows PowerShell
 # source .venv/bin/activate     # macOS/Linux
-pip install -r requirements.txt
-cp .env.example .env            # edit DATABASE_URL and SECRET_KEY
-alembic upgrade head
-uvicorn app.main:app --reload --port 8000
+pip install -r backend/requirements.txt
+cp backend/.env.example backend/.env   # edit DATABASE_URL
+python -m uvicorn backend.app.main:app --reload --port 8000
 
-# Frontend (new terminal)
+# Frontend (new terminal, from src/frontend/)
 cd src/frontend
 npm install
-cp .env.example .env            # edit VITE_API_URL
+cp .env.example .env            # edit VITE_API_BASE_URL if needed
 npm run dev
 ```
 
-Health check: `GET http://localhost:8000/health` → `{"status": "ok"}`
+Health check: `GET http://localhost:8000/api/v1/health` → `{"status": "healthy", "service": "portflow-api", "version": "0.1.0"}`
 
 ---
 

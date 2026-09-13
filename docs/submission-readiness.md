@@ -1,8 +1,10 @@
 # Submission Readiness — PortFlow AI
 
-**Track:** AI  |  **Problem:** L1 — Container Congestion Predictor & Port Operations Optimiser  
-**Organiser submission window:** 15 September 2026, 12:00 PM – 11:45 PM  
+**Track:** AI  |  **Problem:** L1 — Container Congestion Predictor & Port Operations Optimiser
+**Organiser submission window:** 15 September 2026, 12:00 PM – 11:45 PM
 ⚠️ **Confirm timezone with the organiser before final submission.**
+
+**Last updated:** Plan 2 session (2026-09-13)
 
 ---
 
@@ -17,18 +19,24 @@
 | `docs/architecture.md` | ✅ Complete | Mermaid diagram, tech table, data flow, security |
 | `docs/setup-guide.md` | ✅ Complete | `src/`-based commands; repo URL marked pending |
 | `.github/workflows/validate.yml` | ✅ Complete | Official validator — not modified |
-| `src/` directory exists | ✅ Complete | Placeholder; application code not yet implemented |
-| `demo/demo-video-link.txt` | ✅ Complete | Placeholder; URL pending |
-| `demo/live-demo-url.txt` | ✅ Complete | Placeholder; URL pending |
+| `.python-version` | ✅ Complete | Contains `3.12` (target spec) |
+| `.gitignore` | ✅ Complete | Covers env, node_modules, dist, venv, ML artefacts, data dirs |
+| `src/` directory and application skeleton | ✅ Complete | FastAPI + React shell created; no feature code yet |
+| `demo/demo-video-link.txt` | ✅ Complete | Placeholder pending demo video |
+| `demo/live-demo-url.txt` | ✅ Complete | Contains `NOT DEPLOYED` |
 | `demo/screenshots/` directory | ✅ Complete | Empty; screenshots pending |
 | `presentation/` directory | ✅ Complete | Empty; slide deck pending |
 | `bob_sessions/` directory + README | ✅ Complete | README explains export requirements; sessions pending |
 | `CONTRIBUTING.md` | ✅ Complete | |
-| All code paths use `src/` layout | ✅ Complete | Verified in setup guide and architecture |
+| All code paths use `src/` layout | ✅ Complete | Verified in setup guide, architecture, and all commands |
 | ML, optimiser, LLM, and deterministic roles distinct | ✅ Complete | Documented in solution-overview and architecture |
 | Synthetic data policy explicit | ✅ Complete | Data dictionary and architecture |
-| Human approval required for routing/plans | ✅ Complete | Documented and enforced by design |
-| No secrets or real credentials in source | ✅ Complete | Only placeholder env var names |
+| Human approval required for routing/plans | ✅ Complete | Documented; `/operations-plan` route has approval gate UI stub |
+| No secrets or real credentials in source | ✅ Complete | Only `.env.example` files committed |
+| `GET /api/v1/health` returns exact contract response | ✅ Complete | `{"status":"healthy","service":"portflow-api","version":"0.1.0"}` |
+| Backend tests pass (`pytest backend/tests -q` from `src/`) | ✅ Complete | 3 passed, 0 failures |
+| Frontend production build passes (`npm run build` in `src/frontend/`) | ✅ Complete | Vite 6, 0 errors |
+| `npm audit` — 0 high-severity vulnerabilities | ✅ Complete | 0 vulnerabilities |
 
 ---
 
@@ -36,15 +44,18 @@
 
 | Item | Status | Notes |
 |---|---|---|
-| `src/backend/` — FastAPI application | 🔲 Not started | Plan 2 |
-| `src/backend/` — SQLAlchemy models + Alembic migrations | 🔲 Not started | Plan 2 |
-| `src/backend/` — scikit-learn ML pipeline | 🔲 Not started | Plan 2 |
-| `src/backend/` — OR-Tools CP-SAT solver | 🔲 Not started | Plan 2 |
-| `src/backend/` — synthetic data generation | 🔲 Not started | Plan 2 |
-| `src/frontend/` — React + Vite + TypeScript app | 🔲 Not started | Plan 2 |
-| `src/backend/` — PortFlow MCP server | 🔲 Not started | Plan 2 |
-| Backend test suite (`pytest`) | 🔲 Not started | Plan 2 |
-| Frontend test suite + typecheck | 🔲 Not started | Plan 2 |
+| `src/backend/` — FastAPI app factory + health endpoint | ✅ Complete | Plan 2 |
+| `src/backend/` — pydantic-settings config, CORS, error envelope | ✅ Complete | Plan 2 |
+| `src/frontend/` — React + Vite + TS shell, all 7 routes | ✅ Complete | Plan 2 |
+| `src/backend/` — SQLAlchemy ORM models + Alembic migration | 🔲 Not started | Plan 3 |
+| `src/backend/` — Pydantic v2 request/response schemas | 🔲 Not started | Plan 3 |
+| `src/backend/` — CRUD route handlers | 🔲 Not started | Plan 4 |
+| `src/backend/` — scikit-learn ML pipeline + training | 🔲 Not started | Plan 4 |
+| `src/backend/` — synthetic data generation | 🔲 Not started | Plan 4 |
+| `src/backend/` — OR-Tools CP-SAT solver | 🔲 Not started | Plan 5 |
+| `src/frontend/` — real data connected to API | 🔲 Not started | Plan 5 |
+| `src/backend/` — PortFlow MCP server | 🔲 Not started | Plan 6 |
+| Backend test suite coverage ≥ 70% | 🔲 Not started | Plan 6 |
 
 ---
 

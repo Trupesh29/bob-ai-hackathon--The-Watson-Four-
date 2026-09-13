@@ -11,17 +11,24 @@
 
 ## Health
 
-### `GET /health`
+### `GET /api/v1/health`
 
-Returns the API status.  No authentication required.
+Returns the API liveness status.  No authentication required.
+No database connection is required.
 
 **Response 200:**
 ```json
 {
-  "status": "ok",
-  "environment": "development"
+  "status": "healthy",
+  "service": "portflow-api",
+  "version": "0.1.0"
 }
 ```
+
+> **Contract change (Plan 2):** Original Plan 1 endpoint was `GET /health`
+> returning `{"status":"ok","environment":"development"}`.  Updated in Plan 2
+> to `GET /api/v1/health` (under the `/api/v1` prefix) with the canonical
+> Bobathon response shape.  Recorded in `docs/AI_HANDOFF.md`.
 
 ---
 
@@ -338,3 +345,4 @@ All error responses follow this structure:
 | Date | Change | Recorded in AI_HANDOFF.md |
 |---|---|---|
 | 2026-09-13 | Initial contract created | Yes — Plan 1 session |
+| 2026-09-13 | Health endpoint moved to `/api/v1/health`; response shape updated to `{"status":"healthy","service":"portflow-api","version":"0.1.0"}` | Yes — Plan 2 session |

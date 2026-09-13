@@ -1,4 +1,4 @@
-LIVE DEMO URL PENDING
+NOT DEPLOYED
 
 The PortFlow AI application has not yet been deployed to a public URL.
 

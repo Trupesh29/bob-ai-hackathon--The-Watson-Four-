@@ -1,8 +1,8 @@
 # Setup Guide — PortFlow AI
 
-> **Note:** Application source code has not been implemented yet.
-> This guide documents the intended setup procedure based on the confirmed
-> architecture.  Commands will be verified and updated once `src/` is populated.
+> **Status (Plan 2):** Backend and frontend skeleton are implemented.
+> The health endpoint is functional.  Database, ML, and optimiser code is
+> not yet implemented (Plans 3–5).
 > Repository URL is pending (see `submission.yaml`).
 
 ---
@@ -98,25 +98,25 @@ REROUTE_THRESHOLD=0.7
 | `REROUTE_THRESHOLD` | Congestion risk score threshold for routing recommendations | `0.7` |
 
 ```bash
-# Run database migrations
-alembic upgrade head
+# Run database migrations (Plan 3+)
+# alembic upgrade head
 
-# Seed synthetic data
-python -m app.data.seed
+# Seed synthetic data (Plan 4+)
+# python -m app.data.seed
 
-# Start the backend API server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Start the backend API server (from src/)
+python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Health check:**
+**Health check (Plan 2 and later):**
 
 ```bash
-curl http://localhost:8000/health
-# Expected: {"status": "ok", "environment": "development"}
+curl http://localhost:8000/api/v1/health
+# Expected: {"status": "healthy", "service": "portflow-api", "version": "0.1.0"}
 ```
 
-**Interactive API docs:**  
-Open `http://localhost:8000/docs` in a browser (Swagger UI).
+**Interactive API docs:**
+Open `http://localhost:8000/api/v1/docs` in a browser (Swagger UI).
 
 ---
 
@@ -171,18 +171,13 @@ ls app/ml/models/
 ## 5. Running Tests
 
 ```bash
-# Backend unit and integration tests
-cd src/backend
-pytest tests/ -v
+# Backend unit and integration tests (from src/)
+python -m pytest backend/tests -q
 
-# Frontend unit tests
-cd src/frontend
-npm test
-
-# Frontend type check
+# Frontend type check (from src/frontend/)
 npm run typecheck
 
-# Frontend lint
+# Frontend lint (from src/frontend/)
 npm run lint
 ```
 
