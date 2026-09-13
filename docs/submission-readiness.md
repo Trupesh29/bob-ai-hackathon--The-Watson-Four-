@@ -71,7 +71,9 @@
 | `src/frontend/src/tests/DashboardPage.test.tsx` — 9 UI tests | ✅ Complete | Plan 4+6 |
 | `src/ml/` — scikit-learn congestion RF classifier + training | ✅ Complete | Plan 5 |
 | `src/ml/` — ML integrated into FastAPI via mode=ml param | ✅ Complete | Plan 6 |
-| `src/backend/` — OR-Tools CP-SAT solver | 🔲 Not started | Future |
+| `src/optimizer/` — OR-Tools CP-SAT berth-and-crane optimizer | ✅ Complete | Plan 7 — standalone module, 11 tests |
+| `src/ml/waiting_*.py` — waiting-time regression pipeline | ✅ Complete | Plan 8 — 11 tests, MAE 8.44 h vs baseline 12.02 h |
+| `src/optimizer/` — API integration (optimise + approval endpoints) | 🔲 Not started | Future |
 | `src/backend/` — PortFlow MCP server | 🔲 Not started | Future |
 | Backend test suite coverage ≥ 70% | 🔲 Not started | Future |
 

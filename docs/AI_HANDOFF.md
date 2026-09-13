@@ -723,3 +723,151 @@ At the end of each session:
 
 Do not fabricate these artifacts. Export them from the IBM Bob IDE after this
 task is complete.
+
+---
+
+## Session: Plan 7 — CP-SAT Berth-and-Crane Optimizer
+
+**Date:** 2026-09-13
+**Goal:** Implement a testable OR-Tools CP-SAT berth-and-crane allocation engine
+as a standalone module (`src/optimizer/`). No API or frontend changes.
+
+### Files Changed
+
+| File | Action | Notes |
+|---|---|---|
+| `src/optimizer/__init__.py` | Created | Package marker |
+| `src/optimizer/models.py` | Created | In-memory dataclasses: `VesselInput`, `BerthInput`, `CraneInput`, `BerthAssignment`, `UnscheduledVessel`, `OptimizerMetrics`, `OptimizerResult` |
+| `src/optimizer/feasibility.py` | Created | `is_berth_compatible()`, `compatible_berths()`, `partition_vessels()`, `estimate_service_minutes()` |
+| `src/optimizer/berth_crane_optimizer.py` | Created | CP-SAT model; FIFO baseline; `optimize()` entry point; weighted objective |
+| `src/optimizer/explain.py` | Created | `explain_assignment()`, `explain_unscheduled()`, `explain_result()` |
+| `src/optimizer/README.md` | Updated | Full module documentation |
+| `src/optimizer/tests/__init__.py` | Created | Package marker |
+| `src/optimizer/tests/test_berth_crane_optimizer.py` | Created | 11 tests |
+
+### Run Command
+
+```bash
+# From src/
+python -m pytest optimizer/tests/ -v
+```
+
+### Test Results
+
+```
+11 passed, 1 warning
+```
+
+### Optimizer Assumptions
+
+1. Planning horizon: configurable (default 72 h).
+2. Service duration estimated from `expected_containers / (cranes × avg_moves_per_hour)`.
+3. Minimum service time: 60 minutes (floor).
+4. Cranes at the assigned berth are used first; movable cranes fill shortfalls.
+5. No tidal windows, pilotage delays, or weather effects.
+6. All data synthetic (seed=2026).
+
+### Hard Constraints
+
+- One vessel per berth at a time (CP-SAT `add_no_overlap`).
+- Vessel length and draft must fit berth (pre-solve filter + model exclusion).
+- Service start >= vessel arrival time.
+- Service end <= horizon end.
+- Cranes assigned <= berth max_cranes.
+
+### Objective (weighted sum)
+
+- Minimize total wait × 1000 (primary)
+- Minimize unscheduled vessels × 500 000 (secondary)
+
+### Known Limitations
+
+1. **Not integrated into FastAPI** — `optimize()` is a pure Python function. API
+   integration (Plan 8) will add `POST /api/v1/plans/optimise` and the human
+   approval gate.
+2. **Crane assignment simplified** — time-indexed crane feasibility not fully
+   modelled; each vessel's crane count is bounded but inter-vessel crane conflicts
+   are not resolved by time.
+3. **Synthetic data only** — 28-row dataset; results are illustrative.
+4. **OR-Tools 9.15 required** — `cranes_var * is_scheduled` multiplication not
+   supported in this version; global crane cap is enforced via per-berth conditional
+   constraints instead.
+
+### Next Task — Plan 8: API Integration for the Optimizer
+
+- Add `POST /api/v1/plans/optimise` endpoint calling `optimize()`.
+- Add `POST /api/v1/plans/{plan_id}/approve` and `/reject` approval gate.
+- Wire the Optimizer page in the React dashboard to real endpoints.
+- Add backend tests for the optimise and approval flows.
+
+---
+
+## Session: Plan 8 — Waiting-Time Regression Pipeline
+
+**Date:** 2026-09-13
+**Goal:** Add a leak-safe vessel waiting-time regression pipeline using synthetic
+historical operations data. No API or frontend changes.
+
+### Files Changed
+
+| File | Action | Notes |
+|---|---|---|
+| `src/ml/waiting_dataset.py` | Created | `WaitingRow`, `WaitingDatasetBuilder`, `build_default_dataset()`; target = `(berth_start − actual_arrival) / 3600`; `FORBIDDEN_COLUMNS` leakage guard |
+| `src/ml/waiting_features.py` | Created | `ALL_FEATURE_NAMES`, `CATEGORICAL_FEATURES`, `NUMERIC_FEATURES`, `rows_to_arrays()`, `chronological_split()` |
+| `src/ml/waiting_train.py` | Created | Training script; Pipeline(SimpleImputer+OHE+RandomForestRegressor); saves `waiting_pipeline.joblib` + `waiting_metadata.json` |
+| `src/ml/waiting_predict.py` | Created | `WaitingPredictor` class; `predict()` returns `WaitingPrediction` with non-negative clamped output |
+| `src/ml/waiting_evaluate.py` | Created | Evaluation script; MAE, RMSE, R², baseline comparison |
+| `src/ml/tests/test_waiting_pipeline.py` | Created | 11 tests |
+
+### Run Commands
+
+```bash
+# From src/
+python -m ml.waiting_train
+python -m ml.waiting_evaluate
+python -m pytest ml/tests/test_waiting_pipeline.py -v
+```
+
+### Training / Evaluation Results (synthetic, illustrative only)
+
+| Metric | Value |
+|---|---|
+| Dataset rows | 44 (30 train / 6 val / 8 test) |
+| Target range | 0.00 – 39.67 h (mean 13.44 h) |
+| Test MAE | 8.44 h |
+| Test RMSE | 10.30 h |
+| Test R² | 0.26 |
+| Baseline (median-train) MAE | 12.02 h |
+| vs Baseline | +3.58 h better |
+| Data source | synthetic (seed=2026) |
+
+### Target Derivation
+
+```
+actual_waiting_hours = (berth_start - actual_arrival).total_seconds() / 3600
+```
+
+Verified to match `waiting_minutes / 60` from the generator (within float tolerance).
+
+### Leakage Guard
+
+Forbidden columns (never used as features): `berth_start`, `berth_end`,
+`actual_departure`, `waiting_minutes`, `service_minutes`, `cranes_used`,
+`average_moves_per_hour`, `assigned_berth_id`, `delay_reason`, `actual_waiting_hours`.
+
+### Test Results
+
+```
+python -m pytest backend/tests/ ml/tests/ optimizer/tests/ -q
+74 passed, 1 skipped
+```
+
+### Known Limitations
+
+1. **44 rows** — too small for meaningful generalisation; metrics illustrative only.
+2. **uuid.uuid4() in generator** — schedule IDs are not reproducible across
+   generator calls; tests use a single DS instance for ID-based lookups.
+3. **Single cargo type** — "containerised" only in synthetic data; OHE adds no
+   signal on this column.
+4. **Not integrated into API** — `WaitingPredictor` exists but not wired to any
+   endpoint.
