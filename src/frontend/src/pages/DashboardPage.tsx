@@ -27,6 +27,7 @@ import {
   ApiRequestError,
 } from '../services/api'
 import type {
+  CongestionMode,
   DashboardSummaryResponse,
   DashboardCongestionResponse,
   SchedulesResponse,
@@ -126,6 +127,7 @@ interface DashboardState {
 export default function DashboardPage() {
   const portCode = DEFAULT_PORT_CODE
   const [scenario, setScenario] = useState<ScenarioId>('baseline')
+  const [congestionMode, setCongestionMode] = useState<CongestionMode>('baseline')
   const [state, setState] = useState<DashboardState>({
     status: 'idle',
     error: null,
@@ -135,12 +137,12 @@ export default function DashboardPage() {
     berths: null,
   })
 
-  const load = useCallback(async (sc: ScenarioId) => {
+  const load = useCallback(async (sc: ScenarioId, mode: CongestionMode) => {
     setState(prev => ({ ...prev, status: 'loading', error: null }))
     try {
       const [summary, congestion, schedules, berths] = await Promise.all([
         fetchDashboardSummary(portCode, sc),
-        fetchDashboardCongestion(portCode, sc),
+        fetchDashboardCongestion(portCode, sc, 72, mode),
         fetchSchedules(portCode, sc),
         fetchBerths(portCode),
       ])
@@ -172,8 +174,8 @@ export default function DashboardPage() {
   }, [portCode])
 
   useEffect(() => {
-    load(scenario)
-  }, [scenario, load])
+    load(scenario, congestionMode)
+  }, [scenario, congestionMode, load])
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (state.status === 'idle' || state.status === 'loading') {
@@ -193,7 +195,7 @@ export default function DashboardPage() {
         <h2 className="text-red-300 font-semibold mb-2">Backend unavailable</h2>
         <p className="text-red-400 text-sm mb-4">{state.error}</p>
         <button
-          onClick={() => load(scenario)}
+          onClick={() => load(scenario, congestionMode)}
           className="px-4 py-1.5 bg-red-700 hover:bg-red-600 text-white text-sm rounded"
         >
           Retry
@@ -243,7 +245,7 @@ export default function DashboardPage() {
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span
             data-testid="synthetic-label"
             className="px-2.5 py-1 text-xs font-medium bg-amber-900/30 text-amber-300 border border-amber-700 rounded"
@@ -251,12 +253,33 @@ export default function DashboardPage() {
             Synthetic demo data
           </span>
           <span className="px-2.5 py-1 text-xs bg-slate-700 text-slate-400 border border-slate-600 rounded">
-            Baseline rule — ML model pending
+            {congestionMode === 'ml'
+              ? 'Trained on synthetic data'
+              : 'Baseline rule — ML model pending'}
           </span>
           <span className="px-2.5 py-1 text-xs bg-slate-700 text-slate-400 border border-slate-600 rounded">
             Optimization pending
           </span>
         </div>
+      </div>
+
+      {/* ── Congestion mode selector ─────────────────────────────────────────── */}
+      <div className="flex items-center gap-2" data-testid="congestion-mode-selector">
+        <span className="text-slate-500 text-xs">Congestion method:</span>
+        {(['baseline', 'ml'] as CongestionMode[]).map(m => (
+          <button
+            key={m}
+            data-testid={`mode-btn-${m}`}
+            onClick={() => setCongestionMode(m)}
+            className={`px-3 py-1 text-xs font-medium rounded border transition-colors ${
+              congestionMode === m
+                ? 'bg-indigo-700 border-indigo-500 text-white'
+                : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            {m === 'baseline' ? 'Baseline rule' : 'ML model (synthetic)'}
+          </button>
+        ))}
       </div>
 
       {/* ── Scenario selector ───────────────────────────────────────────────── */}
@@ -319,9 +342,15 @@ export default function DashboardPage() {
             <h2 className="text-slate-100 font-medium text-sm">
               72-Hour Congestion Horizon
             </h2>
-            <p className="text-slate-500 text-xs mt-0.5">
-              Calculation: <span className="text-slate-400">baseline_rule_v1</span> ·
-              6-hour windows · Not a trained ML model
+            <p className="text-slate-500 text-xs mt-0.5" data-testid="chart-method-label">
+              Calculation:{' '}
+              <span className="text-slate-400">
+                {state.congestion?.calculation_method ?? 'baseline_rule_v1'}
+              </span>
+              {' '}· 6-hour windows
+              {congestionMode === 'ml' && (
+                <span className="ml-1 text-amber-500">· Trained on synthetic data only</span>
+              )}
             </p>
           </div>
           {summary && (
@@ -358,7 +387,10 @@ export default function DashboardPage() {
                       <p className="text-slate-300">Risk: {d.probability}%</p>
                       <p className="text-slate-400">Level: {d.level}</p>
                       <p className="text-slate-400">Queue: {d.queue} vessels</p>
-                      <p className="text-slate-500 mt-1">baseline_rule_v1</p>
+                      <p className="text-slate-500 mt-1">
+                        {state.congestion?.calculation_method ?? 'baseline_rule_v1'}
+                        {congestionMode === 'ml' && ' · synthetic data only'}
+                      </p>
                     </div>
                   )
                 }}

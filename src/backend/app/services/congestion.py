@@ -67,6 +67,7 @@ from ..schemas.dashboard import (
     DashboardCongestionResponse,
     DashboardSummaryResponse,
     CALCULATION_METHOD,
+    ML_CALCULATION_METHOD,
     VALID_SCENARIOS,
 )
 
@@ -434,4 +435,178 @@ def compute_dashboard_summary(
         avg_estimated_waiting_minutes=avg_waiting_min,
         critical_vessel_count=critical_count,
         selected_scenario=scenario,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ML-mode congestion horizon
+# ─────────────────────────────────────────────────────────────────────────────
+
+_ML_LIMITATIONS = (
+    "Trained on synthetic data only (~28 rows). "
+    "Not validated for real-world port operations. "
+    "Results are illustrative."
+)
+
+
+def compute_congestion_horizon_ml(
+    db: Session,
+    predictor,  # CongestionPredictor instance passed from app.state
+    port_code: str,
+    scenario: str = "baseline",
+    horizon_hours: int = 72,
+    reference_time: datetime | None = None,
+) -> DashboardCongestionResponse:
+    """
+    Compute the congestion horizon using the trained ML classifier (congestion_rf_v1).
+
+    The ML model predicts LOW/MEDIUM/HIGH risk per 6-hour window based on
+    pre-window features only (no leakage).  The risk_probability in each window
+    is the model's confidence score for the predicted class.
+
+    This function:
+    - Never retrains the model.
+    - Uses the same window bucketing logic as the baseline path.
+    - Maps ML labels (HIGH/MEDIUM/LOW) to the project's lowercase risk levels.
+    - Preserves baseline_rule_v1 queue and driver information alongside ML output.
+
+    LIMITATIONS
+    -----------
+    Trained on 28 rows of synthetic data. Metrics are illustrative only.
+    Not suitable for real-world operational decisions.
+    """
+    from sqlalchemy import cast as sa_cast, String as SAStr
+
+    port_id_str, _port_name = _get_port_id_str(db, port_code)
+    if port_id_str is None:
+        return DashboardCongestionResponse(
+            port_code=port_code,
+            horizon_hours=horizon_hours,
+            windows=[],
+            selected_scenario=scenario,
+            selected_mode="ml",
+            calculation_method=ML_CALCULATION_METHOD,
+            limitations=_ML_LIMITATIONS,
+        )
+
+    berth_count: int = (
+        db.query(func.count(Berth.id))
+        .filter(
+            sa_cast(Berth.port_id, SAStr) == port_id_str,
+            Berth.status == "operational",
+        )
+        .scalar()
+        or 1
+    )
+
+    crane_count: int = (
+        db.query(func.count(Crane.id))
+        .filter(
+            sa_cast(Crane.port_id, SAStr) == port_id_str,
+            Crane.status == "operational",
+        )
+        .scalar()
+        or 0
+    )
+    crane_to_berth_ratio = round(crane_count / max(berth_count, 1), 4)
+
+    if reference_time is None:
+        earliest: datetime | None = (
+            db.query(func.min(VesselSchedule.eta))
+            .filter(
+                sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
+                VesselSchedule.is_synthetic == True,  # noqa: E712
+            )
+            .scalar()
+        )
+        if earliest is not None:
+            h = earliest.replace(minute=0, second=0, microsecond=0)
+            h = h.replace(hour=(h.hour // 6) * 6)
+            reference_time = h
+        else:
+            reference_time = datetime.now(tz=timezone.utc)
+
+    _ml_level_map = {"HIGH": "high", "MEDIUM": "medium", "LOW": "low"}
+
+    bucket_hours = 6
+    n_buckets = horizon_hours // bucket_hours
+    windows: List[CongestionWindowResponse] = []
+
+    for i in range(n_buckets):
+        t_start = reference_time + timedelta(hours=i * bucket_hours)
+        t_end = t_start + timedelta(hours=bucket_hours)
+
+        arrivals_rows = (
+            db.query(
+                sa_cast(VesselSchedule.id, SAStr).label("sched_id"),
+                VesselSchedule.eta,
+                VesselSchedule.expected_containers,
+                VesselSchedule.priority,
+            )
+            .filter(
+                sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
+                VesselSchedule.is_synthetic == True,  # noqa: E712
+                VesselSchedule.eta >= t_start,
+                VesselSchedule.eta < t_end,
+            )
+            .all()
+        )
+        arrivals = len(arrivals_rows)
+
+        avg_containers = (
+            sum(r.expected_containers for r in arrivals_rows) / arrivals
+            if arrivals > 0
+            else 0.0
+        )
+        priorities = [r.priority for r in arrivals_rows] if arrivals_rows else [3]
+        raw_occupancy = round(arrivals / max(berth_count, 1), 4)
+
+        feature_dict = {
+            "arrivals_in_window": arrivals,
+            "raw_occupancy": raw_occupancy,
+            "avg_expected_containers": round(avg_containers, 2),
+            "crane_to_berth_ratio": crane_to_berth_ratio,
+            "priority_min": min(priorities),
+            "hour_of_day": t_start.hour,
+            "day_of_week": t_start.weekday(),
+            "scenario": scenario,
+        }
+
+        ml_result = predictor.predict(feature_dict)
+        ml_label_upper = ml_result.label          # "LOW" / "MEDIUM" / "HIGH"
+        ml_confidence = ml_result.probability
+        risk_level_lower = _ml_level_map.get(ml_label_upper, "low")
+
+        # Preserve baseline queue estimate alongside ML label
+        queue = max(0, arrivals - berth_count)
+        schedule_ids = [row.sched_id for row in arrivals_rows]
+
+        windows.append(
+            CongestionWindowResponse(
+                window_start=t_start.isoformat(),
+                window_end=t_end.isoformat(),
+                risk_probability=ml_confidence,
+                risk_level=risk_level_lower,
+                estimated_queue_count=queue,
+                affected_schedule_ids=schedule_ids,
+                rule_drivers=[
+                    f"ML label: {ml_label_upper} (confidence {ml_confidence:.2f})",
+                    f"{arrivals} arrival(s) in window",
+                    f"raw_occupancy={raw_occupancy:.2f}",
+                    f"crane_to_berth_ratio={crane_to_berth_ratio:.2f}",
+                ],
+                ml_label=ml_label_upper,
+                ml_confidence=ml_confidence,
+                ml_model_version=ml_result.model_version,
+            )
+        )
+
+    return DashboardCongestionResponse(
+        port_code=port_code,
+        horizon_hours=horizon_hours,
+        windows=windows,
+        selected_scenario=scenario,
+        selected_mode="ml",
+        calculation_method=ML_CALCULATION_METHOD,
+        limitations=_ML_LIMITATIONS,
     )

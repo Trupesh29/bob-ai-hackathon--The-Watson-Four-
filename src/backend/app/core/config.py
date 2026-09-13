@@ -5,6 +5,7 @@ Application settings loaded from environment variables via pydantic-settings.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -41,12 +42,22 @@ class Settings(BaseSettings):
     # Synthetic data
     synthetic_data_seed: int = 2026
 
+    # ML artifact directory — defaults to src/ml/artifacts/ relative to this file
+    ml_artifact_dir: str = str(
+        Path(__file__).resolve().parent.parent.parent.parent.parent
+        / "src" / "ml" / "artifacts"
+    )
+
     def get_cors_origins(self) -> List[str]:
         """Return CORS origins as a Python list."""
         value = self.cors_origins.strip()
         if value.startswith("["):
             return json.loads(value)
         return [origin.strip() for origin in value.split(",") if origin.strip()]
+
+    def get_ml_artifact_dir(self) -> Path:
+        """Return the ML artifact directory as a resolved Path."""
+        return Path(self.ml_artifact_dir).resolve()
 
 
 settings = Settings()

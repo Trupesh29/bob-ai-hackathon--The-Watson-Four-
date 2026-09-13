@@ -9,6 +9,7 @@
  */
 
 import type {
+  CongestionMode,
   DashboardCongestionResponse,
   DashboardSummaryResponse,
   BerthsResponse,
@@ -84,11 +85,13 @@ export function fetchDashboardCongestion(
   portCode: string,
   scenario: ScenarioId,
   horizonHours = 72,
+  mode: CongestionMode = 'baseline',
 ): Promise<DashboardCongestionResponse> {
   return apiFetch<DashboardCongestionResponse>('/dashboard/congestion', {
     port_code: portCode,
     scenario,
     horizon_hours: horizonHours,
+    mode,
   })
 }
 

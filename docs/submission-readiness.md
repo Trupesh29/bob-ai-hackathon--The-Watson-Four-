@@ -35,13 +35,14 @@
 | No secrets or real credentials in source | ✅ Complete | Only `.env.example` files committed |
 | `GET /api/v1/health` returns exact contract response | ✅ Complete | `{"status":"healthy","service":"portflow-api","version":"0.1.0"}` |
 | `GET /api/v1/dashboard/summary` returns real KPIs | ✅ Complete | Plan 4 — reads seeded PostgreSQL data |
-| `GET /api/v1/dashboard/congestion` returns 12×6h windows | ✅ Complete | Plan 4 — baseline_rule_v1 |
+| `GET /api/v1/dashboard/congestion` returns 12×6h windows | ✅ Complete | Plan 4/6 — mode=baseline (baseline_rule_v1) + mode=ml (congestion_rf_v1) |
 | `GET /api/v1/schedules` returns vessel list | ✅ Complete | Plan 4 |
 | `GET /api/v1/resources/berths` and `/cranes` | ✅ Complete | Plan 4 |
 | `GET /api/v1/scenarios` lists 5 scenarios | ✅ Complete | Plan 4 |
-| Backend tests pass (`pytest backend/tests -v` from `src/`) | ✅ Complete | **34 passed, 1 skipped** (PG integration skipped) |
+| ML congestion classifier trained + integrated | ✅ Complete | Plan 5/6 — congestion_rf_v1 (synthetic data); mode=ml returns 503 if artefact absent |
+| Backend tests pass (`pytest backend/tests ml/tests -q` from `src/`) | ✅ Complete | **52 passed, 1 skipped** |
 | Frontend production build passes (`npm run build` in `src/frontend/`) | ✅ Complete | Vite 6, 0 errors, Recharts included |
-| Frontend tests pass (`npm test` in `src/frontend/`) | ✅ Complete | 7 passed — Vitest + testing-library |
+| Frontend tests pass (`npm test` in `src/frontend/`) | ✅ Complete | **9 passed** — Vitest + testing-library |
 | `npm audit` — 0 high-severity vulnerabilities | ✅ Complete | 0 vulnerabilities |
 
 ---
@@ -66,12 +67,13 @@
 | `src/frontend/src/pages/DashboardPage.tsx` — full dashboard | ✅ Complete | Plan 4 |
 | `src/frontend/src/services/api.ts` — typed API client | ✅ Complete | Plan 4 |
 | `src/frontend/src/types/api.ts` — all API response types | ✅ Complete | Plan 4 |
-| `src/backend/tests/test_dashboard.py` — 18 dashboard API tests | ✅ Complete | Plan 4 |
-| `src/frontend/src/tests/DashboardPage.test.tsx` — 7 UI tests | ✅ Complete | Plan 4 |
-| `src/backend/` — scikit-learn ML pipeline + training | 🔲 Not started | Plan 5 |
-| `src/backend/` — OR-Tools CP-SAT solver | 🔲 Not started | Plan 5 |
-| `src/backend/` — PortFlow MCP server | 🔲 Not started | Plan 6 |
-| Backend test suite coverage ≥ 70% | 🔲 Not started | Plan 6 |
+| `src/backend/tests/test_dashboard.py` — 22 dashboard API tests | ✅ Complete | Plan 4+6 |
+| `src/frontend/src/tests/DashboardPage.test.tsx` — 9 UI tests | ✅ Complete | Plan 4+6 |
+| `src/ml/` — scikit-learn congestion RF classifier + training | ✅ Complete | Plan 5 |
+| `src/ml/` — ML integrated into FastAPI via mode=ml param | ✅ Complete | Plan 6 |
+| `src/backend/` — OR-Tools CP-SAT solver | 🔲 Not started | Future |
+| `src/backend/` — PortFlow MCP server | 🔲 Not started | Future |
+| Backend test suite coverage ≥ 70% | 🔲 Not started | Future |
 
 ---
 

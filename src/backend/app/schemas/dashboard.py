@@ -3,7 +3,7 @@ Pydantic v2 schemas for /api/v1/dashboard/* endpoints.
 
 All responses include:
   - is_synthetic: True  (all data is synthetic demo data)
-  - calculation_method: "baseline_rule_v1"  (never claims ML/statistical confidence)
+  - calculation_method: "baseline_rule_v1" or "ml_model_v1"
 
 These schemas are the single source of truth for dashboard API types.
 They must be kept in sync with src/frontend/src/types/api.ts.
@@ -16,7 +16,9 @@ from pydantic import BaseModel, Field
 
 
 CALCULATION_METHOD = "baseline_rule_v1"
+ML_CALCULATION_METHOD = "ml_model_v1"
 VALID_SCENARIOS = {"baseline", "arrival_surge", "crane_outage", "berth_closure", "handling_slowdown"}
+VALID_MODES = {"baseline", "ml"}
 
 
 class DashboardSummaryResponse(BaseModel):
@@ -55,7 +57,7 @@ class DashboardSummaryResponse(BaseModel):
 
 
 class CongestionWindowResponse(BaseModel):
-    """One 6-hour time window in the congestion horizon."""
+    """One 6-hour time window in the congestion horizon (baseline mode)."""
 
     window_start: str = Field(description="ISO 8601 UTC start of 6-hour bucket")
     window_end: str = Field(description="ISO 8601 UTC end of 6-hour bucket")
@@ -64,6 +66,19 @@ class CongestionWindowResponse(BaseModel):
     estimated_queue_count: int = Field(description="Estimated vessels waiting for a berth")
     affected_schedule_ids: List[str] = Field(description="UUIDs of schedules falling in this window")
     rule_drivers: List[str] = Field(description="Top factors driving this bucket's risk")
+    # ML-mode additions (present when mode=ml, None otherwise)
+    ml_label: Optional[str] = Field(
+        default=None,
+        description="ML risk label: LOW | MEDIUM | HIGH (present when mode=ml)"
+    )
+    ml_confidence: Optional[float] = Field(
+        default=None,
+        description="Probability of the predicted ML class (present when mode=ml)"
+    )
+    ml_model_version: Optional[str] = Field(
+        default=None,
+        description="Model version string (present when mode=ml)"
+    )
 
 
 class DashboardCongestionResponse(BaseModel):
@@ -71,16 +86,29 @@ class DashboardCongestionResponse(BaseModel):
     Response for GET /api/v1/dashboard/congestion.
 
     Returns 12 × 6-hour windows covering the 72-hour horizon.
-    risk_probability is computed by baseline_rule_v1 — a transparent
-    deterministic rule applied to seeded data. No ML model is involved.
+
+    mode=baseline: risk_probability from baseline_rule_v1 (deterministic rule).
+    mode=ml: risk_probability from congestion_rf_v1 (trained on synthetic data).
+
+    LIMITATIONS: mode=ml uses synthetic data only and is not validated for
+    real-world port operations.
     """
 
     port_code: str
     horizon_hours: int = Field(description="Length of planning horizon (default 72)")
     windows: List[CongestionWindowResponse]
     selected_scenario: str
+    selected_mode: str = Field(
+        default="baseline",
+        description="baseline | ml"
+    )
     is_synthetic: bool = True
     calculation_method: str = CALCULATION_METHOD
+    data_source: str = "synthetic"
+    limitations: Optional[str] = Field(
+        default=None,
+        description="Non-null when mode=ml; describes synthetic-data limitations"
+    )
 
 
 class ScheduleResponse(BaseModel):

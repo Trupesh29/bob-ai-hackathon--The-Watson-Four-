@@ -56,10 +56,16 @@ const mockCongestion = {
     estimated_queue_count: Math.max(0, i - 2),
     affected_schedule_ids: [],
     rule_drivers: ['2 arrivals in window', '3 berths available'],
+    ml_label: null,
+    ml_confidence: null,
+    ml_model_version: null,
   })),
   selected_scenario: 'baseline' as const,
+  selected_mode: 'baseline' as const,
   is_synthetic: true,
   calculation_method: 'baseline_rule_v1',
+  data_source: 'synthetic',
+  limitations: null,
 }
 
 const mockSchedules = {
@@ -251,5 +257,61 @@ describe('DashboardPage', () => {
     // Should contain honest labels
     expect(body).toContain('baseline_rule_v1')
     expect(body).toContain('Synthetic demo data')
+  })
+
+  // ── Test 7: Congestion mode selector calls API with selected mode ──────────
+
+  it('sends selected congestion mode to the API', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    // Wait for initial load (mode=baseline by default)
+    await waitFor(() => {
+      expect(api.fetchDashboardCongestion).toHaveBeenCalledTimes(1)
+    })
+    // Initial call: mode defaults to baseline
+    const firstCall = vi.mocked(api.fetchDashboardCongestion).mock.calls[0]
+    expect(firstCall[3]).toBe('baseline')
+
+    // Click ML mode button
+    const mlBtn = screen.getByTestId('mode-btn-ml')
+    fireEvent.click(mlBtn)
+
+    await waitFor(
+      () => {
+        expect(api.fetchDashboardCongestion).toHaveBeenCalledTimes(2)
+      },
+      { timeout: 5000 },
+    )
+
+    // Second call must use mode=ml
+    const secondCall = vi.mocked(api.fetchDashboardCongestion).mock.calls[1]
+    expect(secondCall[3]).toBe('ml')
+  })
+
+  // ── Test 8: Shows method/data-source label from API response ──────────────
+
+  it('displays calculation method label from API response', async () => {
+    // Mock congestion response with ml_model_v1 method (simulates ML mode response)
+    const mlCongestion = {
+      ...mockCongestion,
+      calculation_method: 'ml_model_v1',
+      selected_mode: 'ml' as const,
+      data_source: 'synthetic',
+      limitations: 'Trained on synthetic data only. Not validated for real-world operations.',
+    }
+    vi.mocked(api.fetchDashboardSummary).mockResolvedValue(mockSummary)
+    vi.mocked(api.fetchDashboardCongestion).mockResolvedValue(mlCongestion)
+    vi.mocked(api.fetchSchedules).mockResolvedValue(mockSchedules)
+    vi.mocked(api.fetchBerths).mockResolvedValue(mockBerths)
+
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chart-method-label')).toBeInTheDocument()
+    })
+
+    // The chart method label should show the API-returned calculation_method
+    expect(screen.getByTestId('chart-method-label')).toHaveTextContent('ml_model_v1')
   })
 })

@@ -405,3 +405,93 @@ def test_calculation_method_label():
     resp_congestion = client.get("/api/v1/dashboard/congestion?port_code=FKPFL")
     assert resp_summary.json()["calculation_method"] == "baseline_rule_v1"
     assert resp_congestion.json()["calculation_method"] == "baseline_rule_v1"
+
+
+# ── Plan 6 ML integration tests ───────────────────────────────────────────────
+
+def test_congestion_baseline_mode_explicit():
+    """mode=baseline must return 200 with calculation_method=baseline_rule_v1."""
+    resp = client.get("/api/v1/dashboard/congestion?port_code=FKPFL&mode=baseline")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["calculation_method"] == "baseline_rule_v1"
+    assert body["selected_mode"] == "baseline"
+    assert body["is_synthetic"] is True
+    assert len(body["windows"]) == 12
+
+
+def test_congestion_invalid_mode_422():
+    """Invalid mode parameter must return 422."""
+    resp = client.get("/api/v1/dashboard/congestion?port_code=FKPFL&mode=fancy_ai")
+    assert resp.status_code == 422
+    body = resp.json()
+    assert "detail" in body
+
+
+def test_congestion_ml_mode_no_artifact_503():
+    """
+    mode=ml must return 503 MODEL_ARTIFACT_UNAVAILABLE when no predictor is loaded.
+
+    The TestClient uses the same app instance.  We temporarily set
+    app.state.ml_predictor = None to simulate a missing artifact.
+    """
+    original = getattr(app.state, "ml_predictor", None)
+    app.state.ml_predictor = None
+    try:
+        resp = client.get("/api/v1/dashboard/congestion?port_code=FKPFL&mode=ml")
+        assert resp.status_code == 503
+        body = resp.json()
+        detail = body.get("detail", body)
+        # Accept both FastAPI wrapping and raw dict
+        if isinstance(detail, dict):
+            assert detail.get("error_code") == "MODEL_ARTIFACT_UNAVAILABLE"
+        else:
+            assert "MODEL_ARTIFACT_UNAVAILABLE" in str(body)
+    finally:
+        app.state.ml_predictor = original
+
+
+def test_congestion_ml_mode_with_predictor():
+    """
+    mode=ml with a loaded predictor must return 200 with calculation_method=ml_model_v1.
+
+    Uses a lightweight stub predictor to avoid requiring the trained joblib artefact
+    in the test environment.
+    """
+    import sys
+    from pathlib import Path
+    _src = Path(__file__).resolve().parent.parent.parent
+    if str(_src) not in sys.path:
+        sys.path.insert(0, str(_src))
+
+    from ml.congestion_predict import PredictionResult  # type: ignore[import]
+
+    class _StubPredictor:
+        """Minimal stub that mimics CongestionPredictor.predict()."""
+        def predict(self, feature_dict: dict) -> PredictionResult:
+            return PredictionResult(
+                label="LOW",
+                probability=0.75,
+                all_probabilities={"LOW": 0.75, "MEDIUM": 0.15, "HIGH": 0.10},
+                model_version="congestion_rf_v1",
+            )
+
+    original = getattr(app.state, "ml_predictor", None)
+    app.state.ml_predictor = _StubPredictor()
+    try:
+        resp = client.get("/api/v1/dashboard/congestion?port_code=FKPFL&mode=ml")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["calculation_method"] == "ml_model_v1"
+        assert body["selected_mode"] == "ml"
+        assert body["is_synthetic"] is True
+        assert body["limitations"] is not None
+        assert "synthetic" in body["limitations"].lower()
+        assert len(body["windows"]) == 12
+        # Each window should have ML fields populated
+        w = body["windows"][0]
+        assert w["ml_label"] in ("LOW", "MEDIUM", "HIGH")
+        assert 0.0 <= w["ml_confidence"] <= 1.0
+        assert w["ml_model_version"] == "congestion_rf_v1"
+    finally:
+        app.state.ml_predictor = original

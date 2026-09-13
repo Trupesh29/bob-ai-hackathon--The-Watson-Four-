@@ -5,8 +5,12 @@
  * No business calculations are performed in React — all KPI values
  * come directly from FastAPI.
  *
- * Calculation method: "baseline_rule_v1" — never ML, never trained model.
+ * Calculation methods:
+ *   "baseline_rule_v1" — deterministic rule (default)
+ *   "ml_model_v1"      — trained on synthetic data only
  */
+
+export type CongestionMode = 'baseline' | 'ml'
 
 export interface HealthResponse {
   status: string
@@ -42,6 +46,10 @@ export interface CongestionWindow {
   estimated_queue_count: number
   affected_schedule_ids: string[]
   rule_drivers: string[]
+  // ML-mode additions (null when mode=baseline)
+  ml_label: 'LOW' | 'MEDIUM' | 'HIGH' | null
+  ml_confidence: number | null
+  ml_model_version: string | null
 }
 
 export interface DashboardCongestionResponse {
@@ -49,8 +57,11 @@ export interface DashboardCongestionResponse {
   horizon_hours: number
   windows: CongestionWindow[]
   selected_scenario: ScenarioId
+  selected_mode: CongestionMode
   is_synthetic: boolean
   calculation_method: string
+  data_source: string
+  limitations: string | null
 }
 
 // ── Schedules ────────────────────────────────────────────────────────────────

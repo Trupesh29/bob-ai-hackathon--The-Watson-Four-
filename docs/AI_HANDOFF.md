@@ -552,16 +552,174 @@ CP-SAT berth allocation solver.
 
 ---
 
+## Session: Plan 5 — Congestion ML Pipeline
+
+**Date:** 2026-09-13
+**Goal:** Train a synthetic-data congestion risk classifier for six-hour port
+windows using scikit-learn. No FastAPI changes. No frontend changes.
+
+### Files Changed
+
+| File | Action | Notes |
+|---|---|---|
+| `src/ml/__init__.py` | Created | Package marker |
+| `src/ml/congestion_dataset.py` | Created | Dataset builder; leakage guard (`FORBIDDEN_COLUMNS`); `_risk_label()`; `CongestionWindowRow`; `CongestionDatasetBuilder` |
+| `src/ml/congestion_features.py` | Created | `ALL_FEATURE_NAMES`, `FORBIDDEN_COLUMNS`, `rows_to_arrays()`, `chronological_split()` |
+| `src/ml/congestion_train.py` | Created | Full training script; `build_pipeline()`; saves `.joblib` + `metadata.json` |
+| `src/ml/congestion_predict.py` | Created | `CongestionPredictor` class; `predict()` / `predict_batch()` |
+| `src/ml/congestion_evaluate.py` | Created | Evaluation script; macro F1; HIGH/MEDIUM recall; confusion matrix; baseline comparison |
+| `src/ml/README.md` | Updated | Full module documentation |
+| `src/ml/artifacts/.gitkeep` | Created | Directory marker for saved artefacts (not committed) |
+| `src/ml/tests/__init__.py` | Created | Package marker |
+| `src/ml/tests/test_congestion_pipeline.py` | Created | 14 tests covering all required test cases |
+
+### Training Command
+
+```bash
+# From src/
+python -m ml.congestion_train
+```
+
+Artefacts saved to `src/ml/artifacts/`:
+- `congestion_pipeline.joblib` (gitignored via `*.joblib`)
+- `metadata.json`
+
+### Evaluation Command
+
+```bash
+python -m ml.congestion_evaluate
+```
+
+### Evaluation Results (synthetic data — illustrative only)
+
+| Metric | Value |
+|---|---|
+| Test macro F1 | 0.762 |
+| Val macro F1 | 1.000 |
+| HIGH recall (test) | 0.000 (no HIGH rows in test split) |
+| MEDIUM recall (test) | 1.000 |
+| baseline_rule_v1 macro F1 | 1.000 |
+| Dataset rows | 28 (19 train / 4 val / 5 test) |
+| Data source | synthetic (seed=2026) |
+
+⚠ The HIGH recall of 0.000 on test reflects that the 5-row test split
+contains no HIGH-label windows — not a model failure. Dataset is too
+small for statistically meaningful metrics.
+
+### Test Results
+
+```
+python -m pytest backend/tests/ ml/tests/ -q
+48 passed, 1 skipped
+```
+
+### Known Limitations
+
+1. **28-row dataset** — too small for meaningful generalisation. Metrics
+   are purely illustrative. The model is not suitable for production use.
+2. **HIGH class underrepresented** — only 2 HIGH windows in the full dataset.
+   The test split may contain zero HIGH rows depending on split position.
+3. **Synthetic data only** — all labels derived from `raw_occupancy` heuristic;
+   the model is essentially learning the same rule as `baseline_rule_v1`.
+4. **Not integrated into FastAPI** — `CongestionPredictor` exists but the API
+   still uses `baseline_rule_v1`. API integration is the next task.
+5. **pandas dependency** — `congestion_train.py` and `congestion_predict.py`
+   use pandas (available via scikit-learn install). If pandas is removed,
+   replace `_dicts_to_matrix()` with a numpy-only ColumnTransformer approach.
+
+### Next Task — API Integration for Congestion ML
+
+Connect `CongestionPredictor` to the FastAPI congestion endpoints:
+- `GET /api/v1/dashboard/congestion` — optionally use ML predictions when
+  the artefact exists, fall back to `baseline_rule_v1` otherwise.
+- Add `calculation_method: "congestion_rf_v1"` when ML is used.
+- Keep `baseline_rule_v1` as the fallback.
+
+**Before starting, read:**
+- This document (Plan 5 caveats)
+- `src/ml/congestion_predict.py` (`CongestionPredictor` interface)
+- `src/backend/app/services/congestion.py` (current baseline)
+- `src/backend/app/api/v1/dashboard.py` (endpoint to extend)
+
+---
+
+## Session: Plan 6 — ML API Integration
+
+**Date:** 2026-09-13
+**Goal:** Integrate the Plan 5 ML classifier into the existing FastAPI congestion
+endpoint and add a compact Baseline/ML selector to the React dashboard.
+
+### Files Changed
+
+| File | Action | Notes |
+|---|---|---|
+| `src/backend/app/core/config.py` | Updated | Added `ml_artifact_dir` setting (env: `ML_ARTIFACT_DIR`); `get_ml_artifact_dir()` helper |
+| `src/backend/app/main.py` | Updated | Added `_lifespan` context; loads `CongestionPredictor` once at startup into `app.state.ml_predictor` |
+| `src/backend/app/schemas/dashboard.py` | Updated | Added `ML_CALCULATION_METHOD`, `VALID_MODES`; added `ml_label`, `ml_confidence`, `ml_model_version` to `CongestionWindowResponse`; added `selected_mode`, `data_source`, `limitations` to `DashboardCongestionResponse` |
+| `src/backend/app/services/congestion.py` | Updated | Added `compute_congestion_horizon_ml()` function; imports `ML_CALCULATION_METHOD` |
+| `src/backend/app/api/v1/dashboard.py` | Updated | Added `mode` query param; `_validate_mode()`; routes `mode=ml` to ML service; returns 503 with `error_code=MODEL_ARTIFACT_UNAVAILABLE` when predictor not loaded |
+| `src/backend/tests/test_dashboard.py` | Updated | Added 4 Plan 6 tests: baseline explicit, invalid mode 422, ML no-artifact 503, ML stub predictor 200 |
+| `src/frontend/src/types/api.ts` | Updated | Added `CongestionMode` type; `ml_label`, `ml_confidence`, `ml_model_version` to `CongestionWindow`; `selected_mode`, `data_source`, `limitations` to `DashboardCongestionResponse` |
+| `src/frontend/src/services/api.ts` | Updated | Added `mode: CongestionMode = 'baseline'` param to `fetchDashboardCongestion()` |
+| `src/frontend/src/pages/DashboardPage.tsx` | Updated | Added `congestionMode` state; mode selector buttons (`data-testid="mode-btn-baseline"` / `"mode-btn-ml"`); updated chart label to show `calculation_method` from API; ML disclaimer label |
+| `src/frontend/src/tests/DashboardPage.test.tsx` | Updated | Added 2 tests (mode selector sends correct mode; chart method label from API); updated mock to include new fields |
+
+### API Change
+
+`GET /api/v1/dashboard/congestion` now accepts `?mode=baseline|ml` (default: `baseline`).
+
+- `mode=baseline`: unchanged behaviour; `calculation_method: "baseline_rule_v1"`
+- `mode=ml`: uses `CongestionPredictor` loaded at startup; `calculation_method: "ml_model_v1"`; 503 if artefact absent
+- Invalid mode: HTTP 422
+
+### Run Commands
+
+```bash
+# From src/ — required before starting the API for mode=ml
+python -m ml.congestion_train
+
+# Backend tests
+python -m pytest backend/tests/ ml/tests/ -q
+
+# Frontend tests
+cd frontend && npm test
+
+# Frontend build
+cd frontend && npm run build
+```
+
+### Validation Results
+
+| Check | Result |
+|---|---|
+| Backend tests | **52 passed, 1 skipped** |
+| Frontend tests | **9 passed** |
+| Production build | **✓ built in 6.22s** |
+| `git diff --check` | Exit 0 |
+| No `.joblib` or `.env` staged | Confirmed |
+
+### Known Limitations
+
+1. **Artefact must be generated manually** — run `python -m ml.congestion_train` before
+   starting the FastAPI server if `mode=ml` is needed. The API returns 503 if not present.
+2. **28-row training set** — ML predictions on synthetic data mirror the baseline rule.
+   The model has no real operational advantage over `baseline_rule_v1`.
+3. **No result caching** — every ML request runs 12 individual `predictor.predict()` calls.
+   Acceptable for the demo; profile before production use.
+4. **pandas loaded at predict time** — imported lazily in `CongestionPredictor.predict()`.
+
+---
+
 ## IBM Bob Evidence — Human Action Required
 
-At the end of this session:
+At the end of each session:
 
 1. Export this IBM Bob task history as Markdown.
 2. Capture the IBM Bob task-consumption summary screenshot.
 3. Remove any secrets or personal data from the export.
 4. Save both files under `bob_sessions/` with filenames:
-   - `plan4-session-YYYY-MM-DD.md`
-   - `plan4-session-YYYY-MM-DD-screenshot.png`
+   - `plan6-session-YYYY-MM-DD.md`
+   - `plan6-session-YYYY-MM-DD-screenshot.png`
 
 Do not fabricate these artifacts. Export them from the IBM Bob IDE after this
 task is complete.
