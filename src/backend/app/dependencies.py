@@ -31,7 +31,13 @@ _engine = create_engine(
 )
 
 from .models import Base  # noqa: E402
-Base.metadata.create_all(bind=_engine)
+
+# ── SQLite dev-only schema bootstrap ─────────────────────────────────────────
+# Alembic owns all schema changes for PostgreSQL environments.
+# For SQLite (local dev / tests), we auto-create tables so the app starts
+# without running migrations manually.  Never call create_all in production.
+if settings.database_url.startswith("sqlite"):
+    Base.metadata.create_all(bind=_engine)
 
 _SessionLocal = sessionmaker(
     bind=_engine,

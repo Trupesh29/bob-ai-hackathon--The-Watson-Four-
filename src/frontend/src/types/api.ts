@@ -262,3 +262,74 @@ export interface CopilotAskResponse {
 export interface ApiError {
   detail: string | { error: string; message: string }
 }
+
+// ── Operations Plan ───────────────────────────────────────────────────────────
+
+export interface BerthAssignment {
+  schedule_id: string
+  vessel_id: string
+  vessel_name: string
+  berth_id: string
+  berth_code: string
+  start_time: string
+  end_time: string
+  cranes_assigned: number
+  service_minutes: number
+  waiting_minutes: number
+  priority: number
+  explanation: string
+}
+
+export interface UnscheduledVessel {
+  schedule_id: string
+  vessel_id: string
+  vessel_name: string
+  arrival_time: string
+  priority: number
+  reason: string
+}
+
+export interface OptimizerMetrics {
+  total_vessels: number
+  scheduled_count: number
+  unscheduled_count: number
+  fifo_total_wait_minutes: number
+  opt_total_wait_minutes: number
+  wait_reduction_minutes: number
+  avg_wait_minutes: number
+  berth_utilization_pct: number
+  crane_utilization_pct: number
+  solve_status: string
+  solve_wall_seconds: number
+}
+
+export interface OperationsPlanResponse {
+  plan_id: string
+  port_code: string
+  horizon_hours: number
+  assignments: BerthAssignment[]
+  unscheduled: UnscheduledVessel[]
+  metrics: OptimizerMetrics | null
+  explanation: string
+  assumptions: string[]
+  optimizer_method: string
+  approval_required: boolean
+  approved: boolean
+  is_synthetic: boolean
+  data_source: string
+  limitations: string
+}
+
+export interface OperationsPlanApprovalResponse {
+  plan_id: string
+  approved: boolean
+  message: string
+  is_synthetic: boolean
+  disclaimer: string
+}
+
+export interface OperationsPlanRequest {
+  port_code?: string
+  horizon_hours?: number
+  solve_limit_seconds?: number
+}

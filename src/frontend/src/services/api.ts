@@ -157,3 +157,41 @@ export function fetchCopilotAsk(
     return resp.json() as Promise<CopilotAskResponse>
   })
 }
+
+export function fetchOperationsPlan(
+  req: import('../types/api').OperationsPlanRequest = {},
+): Promise<import('../types/api').OperationsPlanResponse> {
+  const url = new URL(`${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'}/operations-plan`, window.location.origin)
+  return fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  }).then(async (resp) => {
+    if (!resp.ok) {
+      let body: unknown
+      try { body = await resp.json() } catch { body = { detail: resp.statusText } }
+      throw new ApiRequestError(resp.status, body, `API ${resp.status}: ${resp.statusText}`)
+    }
+    return resp.json() as Promise<import('../types/api').OperationsPlanResponse>
+  })
+}
+
+export function approveOperationsPlan(
+  planId: string,
+): Promise<import('../types/api').OperationsPlanApprovalResponse> {
+  const url = new URL(
+    `${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'}/operations-plan/${encodeURIComponent(planId)}/approve`,
+    window.location.origin,
+  )
+  return fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  }).then(async (resp) => {
+    if (!resp.ok) {
+      let body: unknown
+      try { body = await resp.json() } catch { body = { detail: resp.statusText } }
+      throw new ApiRequestError(resp.status, body, `API ${resp.status}: ${resp.statusText}`)
+    }
+    return resp.json() as Promise<import('../types/api').OperationsPlanApprovalResponse>
+  })
+}
