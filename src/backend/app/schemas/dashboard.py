@@ -202,3 +202,105 @@ class ScenariosResponse(BaseModel):
 
     scenarios: List[ScenarioInfo]
     default_scenario: str = "baseline"
+
+
+# ── Waiting-time prediction schemas ───────────────────────────────────────────
+
+WAITING_RISK_LOW_THRESHOLD = 6.0    # hours
+WAITING_RISK_HIGH_THRESHOLD = 12.0  # hours
+WAITING_METHOD_BASELINE = "waiting_baseline_v1"
+WAITING_METHOD_ML = "waiting_rf_v1"
+WAITING_LIMITATIONS = (
+    "Trained on ~44 synthetic rows. Not validated for real-world operations. "
+    "Point estimate only — no confidence interval."
+)
+
+
+def waiting_risk_level(hours: float) -> str:
+    """Map predicted waiting hours to a risk label."""
+    if hours < WAITING_RISK_LOW_THRESHOLD:
+        return "low"
+    if hours <= WAITING_RISK_HIGH_THRESHOLD:
+        return "medium"
+    return "high"
+
+
+class VesselWaitingPrediction(BaseModel):
+    """Waiting-time prediction for one vessel."""
+    schedule_id: str
+    vessel_id: str = Field(description="Vessel UUID — used as the key for alternate-routing requests")
+    vessel_name: str
+    eta: str
+    priority: int
+    predicted_waiting_hours: float
+    risk_level: str = Field(description="low | medium | high")
+    method: str
+    model_version: str
+    data_source: str = "synthetic"
+    is_synthetic: bool = True
+    limitations: str = WAITING_LIMITATIONS
+    primary_cause: Optional[str] = Field(
+        default=None,
+        description="Top driver of predicted wait (e.g. 'high queue at arrival')"
+    )
+
+
+class WaitingTimesResponse(BaseModel):
+    """Response for GET /api/v1/waiting-times."""
+    port_code: str
+    horizon_hours: int
+    mode: str = Field(description="baseline | ml")
+    vessels: List[VesselWaitingPrediction]
+    total: int
+    is_synthetic: bool = True
+    data_source: str = "synthetic"
+    calculation_method: str
+    limitations: str = WAITING_LIMITATIONS
+
+
+# ── Alternate-routing recommendation schemas ──────────────────────────────────
+
+ROUTING_DIVERSION_THRESHOLD = 12.0  # hours — demo assumption
+ROUTING_LIMITATIONS = (
+    "Synthetic data only. Transit and wait times are illustrative estimates. "
+    "Not validated for real-world routing decisions. "
+    "Never use as a real navigational instruction."
+)
+
+
+class PortEstimateResponse(BaseModel):
+    """Estimated time breakdown for one port option."""
+    port_code: str
+    port_name: str
+    diversion_transit_hours: float = Field(
+        description="Synthetic travel time from current port (0.0 for current port)"
+    )
+    predicted_wait_hours: float
+    estimated_handling_hours: float
+    estimated_total_hours: float
+    total_berths: int
+    operational_cranes: int
+    is_current_port: bool
+    is_candidate: bool
+
+
+class AlternateRoutingResponse(BaseModel):
+    """Response for GET /api/v1/vessels/{vessel_id}/alternate-routing."""
+    vessel_id: str
+    vessel_name: str
+    schedule_id: str
+    current_port: PortEstimateResponse
+    candidates: List[PortEstimateResponse]
+    recommended: bool = Field(
+        description="True when best candidate saves >= diversion_threshold_hours"
+    )
+    recommended_port_code: Optional[str] = None
+    recommended_port_name: Optional[str] = None
+    estimated_hours_saved: float
+    reason: str = Field(description="One-sentence human-readable explanation")
+    factors: List[str] = Field(description="Explainable factors driving the decision")
+    diversion_threshold_hours: float = ROUTING_DIVERSION_THRESHOLD
+    data_source: str = "synthetic"
+    is_synthetic: bool = True
+    limitations: str = ROUTING_LIMITATIONS
+    assumptions: List[str]

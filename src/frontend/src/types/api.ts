@@ -11,6 +11,7 @@
  */
 
 export type CongestionMode = 'baseline' | 'ml'
+export type WaitingMode = 'baseline' | 'ml'
 
 export interface HealthResponse {
   status: string
@@ -148,6 +149,113 @@ export interface ScenariosResponse {
   scenarios: ScenarioInfo[]
   default_scenario: string
 }
+
+// ── Waiting-time predictions ─────────────────────────────────────────────────
+
+export interface VesselWaitingPrediction {
+  schedule_id: string
+  vessel_id: string
+  vessel_name: string
+  eta: string
+  priority: number
+  predicted_waiting_hours: number
+  risk_level: 'low' | 'medium' | 'high'
+  method: string
+  model_version: string
+  data_source: string
+  is_synthetic: boolean
+  limitations: string
+  primary_cause: string | null
+}
+
+export interface WaitingTimesResponse {
+  port_code: string
+  horizon_hours: number
+  mode: WaitingMode
+  vessels: VesselWaitingPrediction[]
+  total: number
+  is_synthetic: boolean
+  data_source: string
+  calculation_method: string
+  limitations: string
+}
+
+// ── Alternate-routing recommendation ─────────────────────────────────────────
+
+export interface PortEstimate {
+  port_code: string
+  port_name: string
+  diversion_transit_hours: number
+  predicted_wait_hours: number
+  estimated_handling_hours: number
+  estimated_total_hours: number
+  total_berths: number
+  operational_cranes: number
+  is_current_port: boolean
+  is_candidate: boolean
+}
+
+export interface AlternateRoutingResponse {
+  vessel_id: string
+  vessel_name: string
+  schedule_id: string
+  current_port: PortEstimate
+  candidates: PortEstimate[]
+  recommended: boolean
+  recommended_port_code: string | null
+  recommended_port_name: string | null
+  estimated_hours_saved: number
+  reason: string
+  factors: string[]
+  diversion_threshold_hours: number
+  data_source: string
+  is_synthetic: boolean
+  limitations: string
+  assumptions: string[]
+}
+
+
+// ── Copilot ───────────────────────────────────────────────────────────────────
+
+export interface CopilotContextSnapshot {
+  port_code: string
+  port_name: string
+  scenario: string
+  peak_risk_level: string
+  peak_congestion_risk_pct: number
+  active_vessel_count: number
+  arrivals_next_24h: number
+  avg_estimated_waiting_minutes: number
+  high_risk_vessels: string[]
+  top_waiting_vessel: string | null
+  top_waiting_hours: number | null
+  top_waiting_cause: string | null
+  routing_recommended: boolean | null
+  routing_reason: string | null
+  top_rule_drivers: string[]
+  data_source: string
+}
+
+export interface CopilotAskRequest {
+  port_code: string
+  question: string
+  scenario?: string
+}
+
+export interface CopilotAskResponse {
+  answer: string
+  method: 'rules_fallback' | 'ibm_bob_llm'
+  provider_available: boolean
+  question: string
+  port_code: string
+  scenario: string
+  context_snapshot: CopilotContextSnapshot
+  is_synthetic: boolean
+  data_source: string
+  disclaimer: string
+  limitations: string
+}
+
 
 // ── Error envelope ────────────────────────────────────────────────────────────
 

@@ -20,6 +20,10 @@ from .api.v1.health import router as health_router
 from .api.v1.dashboard import router as dashboard_router
 from .api.v1.schedules import router as schedules_router
 from .api.v1.resources import router as resources_router
+from .api.v1.waiting_times import router as waiting_times_router
+from .api.v1.alternate_routing import router as alternate_routing_router
+from .api.v1.copilot import router as copilot_router
+from .api.v1.operations_plan import router as operations_plan_router
 from .core.config import settings
 from .core.errors import generic_exception_handler, validation_exception_handler
 
@@ -30,36 +34,50 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
-    Load the ML artefact once at startup.
+    Load ML artefacts once at startup.
 
-    Stores a CongestionPredictor in app.state.ml_predictor when the joblib
-    file is present; stores None otherwise.  A 503 is returned at request time
-    when mode=ml is selected and app.state.ml_predictor is None.
+    app.state.ml_predictor      — CongestionPredictor (congestion_pipeline.joblib)
+    app.state.waiting_predictor — WaitingPredictor    (waiting_pipeline.joblib)
+
+    Both default to None when the artefact is absent.
+    A 503 is returned at request time when mode=ml and predictor is None.
     """
     import sys
     from pathlib import Path
 
-    # Add src/ to path so ml.congestion_predict can be imported
     _src = Path(__file__).resolve().parent.parent.parent.parent
     if str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
 
     artifact_dir = settings.get_ml_artifact_dir()
-    pipeline_path = artifact_dir / "congestion_pipeline.joblib"
 
-    if pipeline_path.exists():
+    # ── Congestion predictor ──────────────────────────────────────────────────
+    congestion_path = artifact_dir / "congestion_pipeline.joblib"
+    if congestion_path.exists():
         try:
             from ml.congestion_predict import CongestionPredictor  # type: ignore[import]
-            app.state.ml_predictor = CongestionPredictor(pipeline_path=pipeline_path)
-            logger.info("ML artefact loaded from %s", pipeline_path)
+            app.state.ml_predictor = CongestionPredictor(pipeline_path=congestion_path)
+            logger.info("Congestion ML artefact loaded from %s", congestion_path)
         except Exception as exc:
-            logger.warning("ML artefact found but failed to load: %s", exc)
+            logger.warning("Congestion ML artefact failed to load: %s", exc)
             app.state.ml_predictor = None
     else:
-        logger.info(
-            "ML artefact not found at %s — mode=ml will return 503", pipeline_path
-        )
+        logger.info("Congestion ML artefact not found — mode=ml returns 503")
         app.state.ml_predictor = None
+
+    # ── Waiting-time predictor ────────────────────────────────────────────────
+    waiting_path = artifact_dir / "waiting_pipeline.joblib"
+    if waiting_path.exists():
+        try:
+            from ml.waiting_predict import WaitingPredictor  # type: ignore[import]
+            app.state.waiting_predictor = WaitingPredictor(pipeline_path=waiting_path)
+            logger.info("Waiting-time ML artefact loaded from %s", waiting_path)
+        except Exception as exc:
+            logger.warning("Waiting-time ML artefact failed to load: %s", exc)
+            app.state.waiting_predictor = None
+    else:
+        logger.info("Waiting-time ML artefact not found — mode=ml returns 503")
+        app.state.waiting_predictor = None
 
     yield
     # No teardown required
@@ -99,6 +117,10 @@ def create_app() -> FastAPI:
     app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
     app.include_router(schedules_router, prefix=settings.api_v1_prefix)
     app.include_router(resources_router, prefix=settings.api_v1_prefix)
+    app.include_router(waiting_times_router, prefix=settings.api_v1_prefix)
+    app.include_router(alternate_routing_router, prefix=settings.api_v1_prefix)
+    app.include_router(copilot_router, prefix=settings.api_v1_prefix)
+    app.include_router(operations_plan_router, prefix=settings.api_v1_prefix)
 
     logger.info(
         "PortFlow AI API started | env=%s | version=%s",

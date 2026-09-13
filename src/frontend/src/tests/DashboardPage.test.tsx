@@ -26,6 +26,9 @@ vi.mock('../services/api', async (importOriginal) => {
     fetchDashboardCongestion: vi.fn(),
     fetchSchedules: vi.fn(),
     fetchBerths: vi.fn(),
+    fetchWaitingTimes: vi.fn(),
+    fetchAlternateRouting: vi.fn(),
+    fetchCopilotAsk: vi.fn(),
   }
 })
 
@@ -111,11 +114,118 @@ const mockBerths = {
   is_synthetic: true,
 }
 
+const mockWaitingTimes = {
+  port_code: 'FKPFL',
+  horizon_hours: 72,
+  mode: 'baseline' as const,
+  vessels: [
+    {
+      schedule_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      vessel_id: 'vvvvvvvv-vvvv-vvvv-vvvv-vvvvvvvvvvvv',
+      vessel_name: 'FALKERMERE ATLAS',
+      eta: '2026-09-15T08:00:00+00:00',
+      priority: 1,
+      predicted_waiting_hours: 2.0,
+      risk_level: 'low' as const,
+      method: 'waiting_baseline_v1',
+      model_version: 'waiting_baseline_v1',
+      data_source: 'synthetic',
+      is_synthetic: true,
+      limitations: 'Synthetic data only.',
+      primary_cause: 'high-priority vessel',
+    },
+  ],
+  total: 1,
+  is_synthetic: true,
+  data_source: 'synthetic',
+  calculation_method: 'waiting_baseline_v1',
+  limitations: 'Synthetic data only.',
+}
+
+const mockRouting = {
+  vessel_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  vessel_name: 'FALKERMERE ATLAS',
+  schedule_id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  current_port: {
+    port_code: 'FKPFL',
+    port_name: 'Port of Falkermere',
+    diversion_transit_hours: 0.0,
+    predicted_wait_hours: 2.0,
+    estimated_handling_hours: 4.0,
+    estimated_total_hours: 6.0,
+    total_berths: 3,
+    operational_cranes: 7,
+    is_current_port: true,
+    is_candidate: false,
+  },
+  candidates: [
+    {
+      port_code: 'FKROS',
+      port_name: 'Port of Roskilde (Fictional)',
+      diversion_transit_hours: 8.0,
+      predicted_wait_hours: 3.0,
+      estimated_handling_hours: 4.0,
+      estimated_total_hours: 15.0,
+      total_berths: 4,
+      operational_cranes: 10,
+      is_current_port: false,
+      is_candidate: true,
+    },
+  ],
+  recommended: false,
+  recommended_port_code: null,
+  recommended_port_name: null,
+  estimated_hours_saved: 0.0,
+  reason: 'Best alternative (Port of Roskilde (Fictional)) saves only 0.0 h — below the 12-h diversion threshold. Stay at Port of Falkermere.',
+  factors: ['Current-port wait: 2.0 h (baseline historical)'],
+  diversion_threshold_hours: 12.0,
+  data_source: 'synthetic',
+  is_synthetic: true,
+  limitations: 'Synthetic data only. Not validated for real-world routing decisions.',
+  assumptions: ['Diversion threshold: 12 h (demo assumption).'],
+}
+
+
+const mockCopilot = {
+  answer: '**Port:** Port of Falkermere\n\n1. Prioritise berth allocation.\n2. Review vessel FALKERMERE ATLAS.\n3. No diversion needed.\n\n_Synthetic demo data._',
+  method: 'rules_fallback' as const,
+  provider_available: false,
+  question: 'Why is congestion high?',
+  port_code: 'FKPFL',
+  scenario: 'baseline',
+  context_snapshot: {
+    port_code: 'FKPFL',
+    port_name: 'Port of Falkermere',
+    scenario: 'baseline',
+    peak_risk_level: 'medium',
+    peak_congestion_risk_pct: 45.0,
+    active_vessel_count: 8,
+    arrivals_next_24h: 3,
+    avg_estimated_waiting_minutes: 50.0,
+    high_risk_vessels: [],
+    top_waiting_vessel: 'FALKERMERE ATLAS',
+    top_waiting_hours: 2.0,
+    top_waiting_cause: 'high-priority vessel',
+    routing_recommended: false,
+    routing_reason: 'Stay at current port.',
+    top_rule_drivers: ['2 arrivals in window'],
+    data_source: 'synthetic',
+  },
+  is_synthetic: true,
+  data_source: 'synthetic',
+  disclaimer: 'All data is synthetic demo data.',
+  limitations: 'rules_fallback generates a deterministic explanation.',
+}
+
+
 function setupSuccessMocks() {
   vi.mocked(api.fetchDashboardSummary).mockResolvedValue(mockSummary)
   vi.mocked(api.fetchDashboardCongestion).mockResolvedValue(mockCongestion)
   vi.mocked(api.fetchSchedules).mockResolvedValue(mockSchedules)
   vi.mocked(api.fetchBerths).mockResolvedValue(mockBerths)
+  vi.mocked(api.fetchWaitingTimes).mockResolvedValue(mockWaitingTimes)
+  vi.mocked(api.fetchAlternateRouting).mockResolvedValue(mockRouting)
+  vi.mocked(api.fetchCopilotAsk).mockResolvedValue(mockCopilot)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -137,6 +247,9 @@ describe('DashboardPage', () => {
     vi.mocked(api.fetchDashboardCongestion).mockReturnValue(new Promise(() => {}))
     vi.mocked(api.fetchSchedules).mockReturnValue(new Promise(() => {}))
     vi.mocked(api.fetchBerths).mockReturnValue(new Promise(() => {}))
+    vi.mocked(api.fetchWaitingTimes).mockReturnValue(new Promise(() => {}))
+    vi.mocked(api.fetchAlternateRouting).mockReturnValue(new Promise(() => {}))
+    vi.mocked(api.fetchCopilotAsk).mockReturnValue(new Promise(() => {}))
 
     render(<DashboardPage />)
     expect(screen.getByTestId('loading-state')).toBeInTheDocument()
@@ -151,6 +264,8 @@ describe('DashboardPage', () => {
     vi.mocked(api.fetchDashboardCongestion).mockRejectedValue(new Error('fetch error'))
     vi.mocked(api.fetchSchedules).mockRejectedValue(new Error('fetch error'))
     vi.mocked(api.fetchBerths).mockRejectedValue(new Error('fetch error'))
+    vi.mocked(api.fetchWaitingTimes).mockRejectedValue(new Error('fetch error'))
+    vi.mocked(api.fetchAlternateRouting).mockRejectedValue(new Error('fetch error'))
 
     render(<DashboardPage />)
     await waitFor(() => {
@@ -304,6 +419,8 @@ describe('DashboardPage', () => {
     vi.mocked(api.fetchDashboardCongestion).mockResolvedValue(mlCongestion)
     vi.mocked(api.fetchSchedules).mockResolvedValue(mockSchedules)
     vi.mocked(api.fetchBerths).mockResolvedValue(mockBerths)
+    vi.mocked(api.fetchWaitingTimes).mockResolvedValue(mockWaitingTimes)
+    vi.mocked(api.fetchAlternateRouting).mockResolvedValue(mockRouting)
 
     render(<DashboardPage />)
 
@@ -313,5 +430,246 @@ describe('DashboardPage', () => {
 
     // The chart method label should show the API-returned calculation_method
     expect(screen.getByTestId('chart-method-label')).toHaveTextContent('ml_model_v1')
+  })
+
+  // ── Test 9: Waiting-time mode selector sends correct request ──────────────
+
+  it('sends correct waiting mode when waiting-mode button is clicked', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(api.fetchWaitingTimes).toHaveBeenCalledTimes(1)
+    })
+
+    // Initial call defaults to 'baseline'
+    const firstCall = vi.mocked(api.fetchWaitingTimes).mock.calls[0]
+    expect(firstCall[2]).toBe('baseline')
+
+    // Click ML mode
+    const mlBtn = screen.getByTestId('waiting-mode-btn-ml')
+    fireEvent.click(mlBtn)
+
+    await waitFor(
+      () => {
+        expect(api.fetchWaitingTimes).toHaveBeenCalledTimes(2)
+      },
+      { timeout: 5000 },
+    )
+
+    const secondCall = vi.mocked(api.fetchWaitingTimes).mock.calls[1]
+    expect(secondCall[2]).toBe('ml')
+  })
+
+  // ── Test 10: Dashboard renders waiting-time vessel data ───────────────────
+
+  it('renders waiting-time vessel predictions in the affected vessels table', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vessels-table')).toBeInTheDocument()
+    })
+
+    // Vessel name from mockWaitingTimes
+    expect(screen.getByText('FALKERMERE ATLAS')).toBeInTheDocument()
+  })
+
+  // ── Test 11: Waiting method label is shown ────────────────────────────────
+
+  it('shows waiting-method label from API response', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('waiting-method-label')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('waiting-method-label')).toHaveTextContent('waiting_baseline_v1')
+  })
+
+  // ── Test 12: Synthetic-training-data label on ML waiting mode ─────────────
+
+  it('shows synthetic-training-data label when waiting ML mode is selected', async () => {
+    const mlWaiting = {
+      ...mockWaitingTimes,
+      mode: 'ml' as const,
+      calculation_method: 'waiting_rf_v1',
+    }
+    vi.mocked(api.fetchDashboardSummary).mockResolvedValue(mockSummary)
+    vi.mocked(api.fetchDashboardCongestion).mockResolvedValue(mockCongestion)
+    vi.mocked(api.fetchSchedules).mockResolvedValue(mockSchedules)
+    vi.mocked(api.fetchBerths).mockResolvedValue(mockBerths)
+    vi.mocked(api.fetchWaitingTimes).mockResolvedValue(mlWaiting)
+    vi.mocked(api.fetchAlternateRouting).mockResolvedValue(mockRouting)
+
+    render(<DashboardPage />)
+
+    // Click ML waiting mode
+    await waitFor(() => {
+      expect(screen.getByTestId('waiting-mode-btn-ml')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('waiting-mode-btn-ml'))
+
+    await waitFor(() => {
+      expect(api.fetchWaitingTimes).toHaveBeenCalledTimes(2)
+    })
+
+    // After second fetch completes with ml response, label should be present
+    await waitFor(() => {
+      expect(screen.getByTestId('waiting-method-label')).toHaveTextContent('waiting_rf_v1')
+    })
+  })
+
+  // ── Test 13: Routing card is present ────────────────────────────────────
+
+  it('renders routing recommendation card', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('routing-card')).toBeInTheDocument()
+    })
+  })
+
+  // ── Test 14: Routing result renders when API returns successfully ─────────
+
+  it('renders routing result with reason when data loads', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('routing-result')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('routing-reason')).toHaveTextContent('threshold')
+  })
+
+  // ── Test 15: Routing error state ─────────────────────────────────────────
+
+  it('shows routing error state when alternate-routing API fails', async () => {
+    vi.mocked(api.fetchDashboardSummary).mockResolvedValue(mockSummary)
+    vi.mocked(api.fetchDashboardCongestion).mockResolvedValue(mockCongestion)
+    vi.mocked(api.fetchSchedules).mockResolvedValue(mockSchedules)
+    vi.mocked(api.fetchBerths).mockResolvedValue(mockBerths)
+    vi.mocked(api.fetchWaitingTimes).mockResolvedValue(mockWaitingTimes)
+    vi.mocked(api.fetchAlternateRouting).mockRejectedValue(new Error('routing error'))
+
+    render(<DashboardPage />)
+
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('routing-error')).toBeInTheDocument()
+      },
+      { timeout: 5000 },
+    )
+  })
+
+  // ── Test 16: Routing badge shows "Stay" when not recommended ─────────────
+
+  it('shows "Stay at current port" badge when diversion not recommended', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('routing-badge')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('routing-badge')).toHaveTextContent('Stay at current port')
+  })
+
+  // ── Test 17: Copilot panel is rendered ───────────────────────────────────
+
+  it('renders copilot panel in ready state', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('copilot-panel')).toBeInTheDocument()
+    })
+  })
+
+  // ── Test 18: Copilot shows idle state initially ───────────────────────────
+
+  it('shows copilot idle state before any question is asked', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('copilot-idle')).toBeInTheDocument()
+    })
+  })
+
+  // ── Test 19: Copilot loading state shown while waiting ────────────────────
+
+  it('shows copilot loading state while fetching', async () => {
+    setupSuccessMocks()
+    // Make copilot ask never resolve
+    vi.mocked(api.fetchCopilotAsk).mockReturnValue(new Promise(() => {}))
+
+    render(<DashboardPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('copilot-ask-btn')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Why is congestion high and what should operators do?'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('copilot-loading')).toBeInTheDocument()
+    })
+  })
+
+  // ── Test 20: Copilot response shown on success ────────────────────────────
+
+  it('shows copilot response when ask succeeds', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('copilot-ask-btn')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Why is congestion high and what should operators do?'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('copilot-response')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('copilot-method')).toHaveTextContent('rules_fallback')
+  })
+
+  // ── Test 21: Copilot error state ─────────────────────────────────────────
+
+  it('shows copilot error state when API fails', async () => {
+    setupSuccessMocks()
+    vi.mocked(api.fetchCopilotAsk).mockRejectedValue(new Error('copilot error'))
+
+    render(<DashboardPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('copilot-ask-btn')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Why is congestion high and what should operators do?'))
+
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('copilot-error')).toBeInTheDocument()
+      },
+      { timeout: 5000 },
+    )
+  })
+
+  // ── Test 22: Copilot suggestions are rendered ─────────────────────────────
+
+  it('renders 3 suggested questions', async () => {
+    setupSuccessMocks()
+    render(<DashboardPage />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('copilot-suggestions')).toBeInTheDocument()
+    })
+
+    const suggestions = screen.getByTestId('copilot-suggestions').querySelectorAll('button')
+    expect(suggestions.length).toBe(3)
   })
 })

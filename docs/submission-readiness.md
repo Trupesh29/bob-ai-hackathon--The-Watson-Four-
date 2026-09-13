@@ -4,7 +4,7 @@
 **Organiser submission window:** 15 September 2026, 12:00 PM – 11:45 PM
 ⚠️ **Confirm timezone with the organiser before final submission.**
 
-**Last updated:** Plan 4 session (2026-09-13)
+**Last updated:** Plan 16 (2026-09-13)
 
 ---
 
@@ -40,9 +40,14 @@
 | `GET /api/v1/resources/berths` and `/cranes` | ✅ Complete | Plan 4 |
 | `GET /api/v1/scenarios` lists 5 scenarios | ✅ Complete | Plan 4 |
 | ML congestion classifier trained + integrated | ✅ Complete | Plan 5/6 — congestion_rf_v1 (synthetic data); mode=ml returns 503 if artefact absent |
-| Backend tests pass (`pytest backend/tests ml/tests -q` from `src/`) | ✅ Complete | **52 passed, 1 skipped** |
+| `GET /api/v1/waiting-times` returns per-vessel predictions | ✅ Complete | Plan 9 — mode=baseline + mode=ml |
+| `GET /api/v1/vessels/{vessel_id}/alternate-routing` returns routing recommendation | ✅ Complete | Plan 11 — rule-based, 3 synthetic candidate ports, 12-h threshold |
+| `POST /api/v1/copilot/ask` returns plain-language explanation | ✅ Complete | Plan 12 — rules_fallback always; IBM Bob LLM when configured |
+| `POST /api/v1/operations-plan` runs CP-SAT optimizer and returns assignment plan | ✅ Complete | Plan 13 — approval_required=true; metrics, explanation, assumptions |
+| `POST /api/v1/operations-plan/{plan_id}/approve` records human approval | ✅ Complete | Plan 13 — ephemeral, UUID-validated, no DB writes |
+| Backend tests pass (`pytest backend/tests ml/tests optimizer/tests -q` from `src/`) | ✅ Complete | **157 passed, 1 skipped** |
 | Frontend production build passes (`npm run build` in `src/frontend/`) | ✅ Complete | Vite 6, 0 errors, Recharts included |
-| Frontend tests pass (`npm test` in `src/frontend/`) | ✅ Complete | **9 passed** — Vitest + testing-library |
+| Frontend tests pass (`npm test` in `src/frontend/`) | ✅ Complete | **47 passed** — Vitest + testing-library (23 dashboard + 24 map/alerts) |
 | `npm audit` — 0 high-severity vulnerabilities | ✅ Complete | 0 vulnerabilities |
 
 ---
@@ -73,8 +78,31 @@
 | `src/ml/` — ML integrated into FastAPI via mode=ml param | ✅ Complete | Plan 6 |
 | `src/optimizer/` — OR-Tools CP-SAT berth-and-crane optimizer | ✅ Complete | Plan 7 — standalone module, 11 tests |
 | `src/ml/waiting_*.py` — waiting-time regression pipeline | ✅ Complete | Plan 8 — 11 tests, MAE 8.44 h vs baseline 12.02 h |
-| `src/optimizer/` — API integration (optimise + approval endpoints) | 🔲 Not started | Future |
-| `src/backend/` — PortFlow MCP server | 🔲 Not started | Future |
+| `src/backend/app/api/v1/waiting_times.py` — waiting-time endpoint | ✅ Complete | Plan 9 — mode=baseline (historical) + mode=ml (waiting_rf_v1) |
+| `src/frontend/` — waiting-time mode selector + affected vessels table | ✅ Complete | Plan 9 — DashboardPage enhanced, 13 frontend tests |
+| `src/backend/tests/test_waiting_times.py` — 10 waiting-time API tests | ✅ Complete | Plan 9 |
+| `src/backend/app/services/alternate_routing.py` — rule-based routing service | ✅ Complete | Plan 11 — 3 synthetic candidate ports, 12-h threshold |
+| `src/backend/app/api/v1/alternate_routing.py` — routing endpoint | ✅ Complete | Plan 11 — GET /api/v1/vessels/{vessel_id}/alternate-routing |
+| `src/frontend/` — routing recommendation card | ✅ Complete | Plan 11 — compact card, stay/divert badge, error state, 17 frontend tests |
+| `src/backend/tests/test_alternate_routing.py` — 12 routing API tests | ✅ Complete | Plan 11 |
+| `src/backend/app/services/copilot_service.py` — Copilot context + provider | ✅ Complete | Plan 12 — rules_fallback + IBM Bob stub |
+| `src/backend/app/api/v1/copilot.py` — POST /api/v1/copilot/ask | ✅ Complete | Plan 12 |
+| `src/backend/tests/test_copilot.py` — 15 Copilot API tests | ✅ Complete | Plan 12 |
+| `src/frontend/` — Copilot panel in Dashboard (suggested Q, input, response) | ✅ Complete | Plan 12 — 23 frontend tests |
+| `src/backend/app/schemas/operations_plan.py` — Pydantic schemas for optimizer API | ✅ Complete | Plan 13 |
+| `src/backend/app/services/operations_plan.py` — DB adapter for optimizer | ✅ Complete | Plan 13 |
+| `src/backend/app/api/v1/operations_plan.py` — POST /api/v1/operations-plan + approve | ✅ Complete | Plan 13 |
+| `src/backend/tests/test_operations_plan.py` — 14 optimizer API tests | ✅ Complete | Plan 13 |
+| `src/optimizer/` — API integration (optimise + approval endpoints) | ✅ Complete | Plan 13 — see rows above |
+| `src/mcp/src/index.ts` — PortFlow IBM Bob MCP server (3 read-only tools) | ✅ Complete | Plan 14 — get_risk_explanation, get_plan_summary, get_waiting_time_context |
+| `src/mcp/README.md` — MCP server setup guide | ✅ Complete | Plan 14 |
+| `src/backend/` — PortFlow MCP server | ✅ Complete | Plan 14 — see src/mcp/ above |
+| `src/frontend/src/components/BerthLayoutMap.tsx` — SVG berth layout, status colours, hover tooltip | ✅ Complete | Plan 15 — no external map tiles |
+| `src/frontend/src/components/AlertsPanel.tsx` — alert derivation from API data, severity sort | ✅ Complete | Plan 15 |
+| `src/frontend/src/tests/MapAndAlerts.test.tsx` — 24 focused tests | ✅ Complete | Plan 15 |
+| `src/backend/tests/test_demo_e2e.py` — 32 E2E integration tests | ✅ Complete | Plan 16 — full demo journey, all API paths, error paths |
+| `vessel_id` field in `VesselWaitingPrediction` + routing fix | ✅ Complete | Plan 16 — bug fix; alternate-routing card now uses correct UUID |
+| Demo Runbook in `src/README.md` | ✅ Complete | Plan 16 — 8-step runbook, directory structure, known limitations |
 | Backend test suite coverage ≥ 70% | 🔲 Not started | Future |
 
 ---

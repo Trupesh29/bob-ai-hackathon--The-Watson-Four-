@@ -48,6 +48,14 @@ class Settings(BaseSettings):
         / "src" / "ml" / "artifacts"
     )
 
+    # Copilot / LLM provider — empty string = rules_fallback (safe default)
+    # Set COPILOT_PROVIDER=ibm_bob to enable IBM Bob LLM.
+    # Never log or return these values.
+    copilot_provider: str = ""
+    ibm_bob_api_key: str = ""
+    ibm_bob_model: str = ""
+    ibm_bob_base_url: str = ""
+
     def get_cors_origins(self) -> List[str]:
         """Return CORS origins as a Python list."""
         value = self.cors_origins.strip()

@@ -9,7 +9,11 @@
  */
 
 import type {
+  AlternateRoutingResponse,
   CongestionMode,
+  WaitingMode,
+  CopilotAskRequest,
+  CopilotAskResponse,
   DashboardCongestionResponse,
   DashboardSummaryResponse,
   BerthsResponse,
@@ -17,6 +21,7 @@ import type {
   SchedulesResponse,
   ScenariosResponse,
   ScenarioId,
+  WaitingTimesResponse,
 } from '../types/api'
 
 const BASE_URL =
@@ -115,4 +120,40 @@ export function fetchCranes(portCode: string): Promise<CranesResponse> {
 
 export function fetchScenarios(): Promise<ScenariosResponse> {
   return apiFetch<ScenariosResponse>('/scenarios')
+}
+
+export function fetchWaitingTimes(
+  portCode: string,
+  horizonHours = 72,
+  mode: WaitingMode = 'baseline',
+): Promise<WaitingTimesResponse> {
+  return apiFetch<WaitingTimesResponse>('/waiting-times', {
+    port_code: portCode,
+    horizon_hours: horizonHours,
+    mode,
+  })
+}
+
+export function fetchAlternateRouting(
+  vesselId: string,
+): Promise<AlternateRoutingResponse> {
+  return apiFetch<AlternateRoutingResponse>(`/vessels/${encodeURIComponent(vesselId)}/alternate-routing`)
+}
+
+export function fetchCopilotAsk(
+  req: CopilotAskRequest,
+): Promise<CopilotAskResponse> {
+  const url = new URL(`${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'}/copilot/ask`, window.location.origin)
+  return fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  }).then(async (resp) => {
+    if (!resp.ok) {
+      let body: unknown
+      try { body = await resp.json() } catch { body = { detail: resp.statusText } }
+      throw new ApiRequestError(resp.status, body, `API ${resp.status}: ${resp.statusText}`)
+    }
+    return resp.json() as Promise<CopilotAskResponse>
+  })
 }

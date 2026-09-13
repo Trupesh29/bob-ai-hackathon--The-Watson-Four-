@@ -7,7 +7,7 @@
  * Data is labelled "Synthetic demo data".
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   BarChart,
   Bar,
@@ -18,22 +18,31 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts'
+import BerthLayoutMap from '../components/BerthLayoutMap'
+import AlertsPanel, { deriveAlerts } from '../components/AlertsPanel'
 import {
   fetchDashboardSummary,
   fetchDashboardCongestion,
   fetchSchedules,
   fetchBerths,
+  fetchWaitingTimes,
+  fetchAlternateRouting,
+  fetchCopilotAsk,
   DEFAULT_PORT_CODE,
   ApiRequestError,
 } from '../services/api'
 import type {
+  AlternateRoutingResponse,
+  CopilotAskResponse,
   CongestionMode,
+  WaitingMode,
   DashboardSummaryResponse,
   DashboardCongestionResponse,
   SchedulesResponse,
   BerthsResponse,
   ScenarioId,
   CongestionWindow,
+  WaitingTimesResponse,
 } from '../types/api'
 
 // ── Scenario configuration ────────────────────────────────────────────────────
@@ -120,7 +129,19 @@ interface DashboardState {
   congestion: DashboardCongestionResponse | null
   schedules: SchedulesResponse | null
   berths: BerthsResponse | null
+  waitingTimes: WaitingTimesResponse | null
+  routing: AlternateRoutingResponse | null
+  routingError: string | null
+  copilotResponse: CopilotAskResponse | null
+  copilotLoading: boolean
+  copilotError: string | null
 }
+
+const SUGGESTED_QUESTIONS = [
+  'Why is congestion high and what should operators do?',
+  'Which vessel is most at risk of delay?',
+  'Should we consider routing vessels to an alternate port?',
+]
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -128,6 +149,8 @@ export default function DashboardPage() {
   const portCode = DEFAULT_PORT_CODE
   const [scenario, setScenario] = useState<ScenarioId>('baseline')
   const [congestionMode, setCongestionMode] = useState<CongestionMode>('baseline')
+  const [waitingMode, setWaitingMode] = useState<WaitingMode>('baseline')
+  const [copilotQuestion, setCopilotQuestion] = useState('')
   const [state, setState] = useState<DashboardState>({
     status: 'idle',
     error: null,
@@ -135,16 +158,24 @@ export default function DashboardPage() {
     congestion: null,
     schedules: null,
     berths: null,
+    waitingTimes: null,
+    routing: null,
+    routingError: null,
+    copilotResponse: null,
+    copilotLoading: false,
+    copilotError: null,
   })
 
-  const load = useCallback(async (sc: ScenarioId, mode: CongestionMode) => {
+  const load = useCallback(
+    async (sc: ScenarioId, cMode: CongestionMode, wMode: WaitingMode) => {
     setState(prev => ({ ...prev, status: 'loading', error: null }))
     try {
-      const [summary, congestion, schedules, berths] = await Promise.all([
+      const [summary, congestion, schedules, berths, waitingTimes] = await Promise.all([
         fetchDashboardSummary(portCode, sc),
-        fetchDashboardCongestion(portCode, sc, 72, mode),
+        fetchDashboardCongestion(portCode, sc, 72, cMode),
         fetchSchedules(portCode, sc),
         fetchBerths(portCode),
+        fetchWaitingTimes(portCode, 72, wMode),
       ])
       const isEmpty =
         summary.active_vessel_count === 0 && congestion.windows.length === 0
@@ -155,7 +186,26 @@ export default function DashboardPage() {
         congestion,
         schedules,
         berths,
+        waitingTimes,
+        routing: null,
+        routingError: null,
+        copilotResponse: null,
+        copilotLoading: false,
+        copilotError: null,
       })
+
+      // Fire alternate-routing fetch for highest-wait vessel (non-blocking)
+      if (!isEmpty && waitingTimes.vessels.length > 0) {
+        const topVessel = waitingTimes.vessels[0]
+        fetchAlternateRouting(topVessel.vessel_id)
+          .then(routing => setState(prev => ({ ...prev, routing, routingError: null })))
+          .catch(() =>
+            setState(prev => ({
+              ...prev,
+              routingError: 'Routing recommendation unavailable',
+            }))
+          )
+      }
     } catch (err) {
       let msg = 'Unknown error'
       if (err instanceof ApiRequestError) {
@@ -173,9 +223,36 @@ export default function DashboardPage() {
     }
   }, [portCode])
 
+  const askCopilot = useCallback((question: string) => {
+    if (!question.trim() || question.trim().length < 3) return
+    setState(prev => ({ ...prev, copilotLoading: true, copilotError: null }))
+    fetchCopilotAsk({ port_code: portCode, question: question.trim(), scenario })
+      .then(copilotResponse =>
+        setState(prev => ({ ...prev, copilotResponse, copilotLoading: false }))
+      )
+      .catch(() =>
+        setState(prev => ({
+          ...prev,
+          copilotLoading: false,
+          copilotError: 'Copilot unavailable — start the backend and retry.',
+        }))
+      )
+  }, [portCode, scenario])
+
   useEffect(() => {
-    load(scenario, congestionMode)
-  }, [scenario, congestionMode, load])
+    load(scenario, congestionMode, waitingMode)
+  }, [scenario, congestionMode, waitingMode, load])
+
+  // Derive operational alerts — must be before any early returns (Rules of Hooks)
+  const alerts = useMemo(
+    () => deriveAlerts({
+      summary: state.summary,
+      congestion: state.congestion,
+      waitingTimes: state.waitingTimes,
+      routing: state.routing,
+    }),
+    [state.summary, state.congestion, state.waitingTimes, state.routing]
+  )
 
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (state.status === 'idle' || state.status === 'loading') {
@@ -195,7 +272,7 @@ export default function DashboardPage() {
         <h2 className="text-red-300 font-semibold mb-2">Backend unavailable</h2>
         <p className="text-red-400 text-sm mb-4">{state.error}</p>
         <button
-          onClick={() => load(scenario, congestionMode)}
+          onClick={() => load(scenario, congestionMode, waitingMode)}
           className="px-4 py-1.5 bg-red-700 hover:bg-red-600 text-white text-sm rounded"
         >
           Retry
@@ -218,7 +295,8 @@ export default function DashboardPage() {
   }
 
   // ── Ready ─────────────────────────────────────────────────────────────────────
-  const { summary, congestion, schedules, berths } = state
+  const { summary, congestion, schedules, berths, waitingTimes, routing, routingError,
+    copilotResponse, copilotLoading, copilotError } = state
 
   // Chart data
   const chartData = (congestion?.windows ?? []).map((w, i) => ({
@@ -405,14 +483,159 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Two-column layout: schedules + berths ────────────────────────────── */}
+      {/* ── Waiting mode selector ───────────────────────────────────────────── */}
+      <div className="flex items-center gap-2" data-testid="waiting-mode-selector">
+        <span className="text-slate-500 text-xs">Waiting-time method:</span>
+        {(['baseline', 'ml'] as WaitingMode[]).map(m => (
+          <button
+            key={m}
+            data-testid={`waiting-mode-btn-${m}`}
+            onClick={() => setWaitingMode(m)}
+            className={`px-3 py-1 text-xs font-medium rounded border transition-colors ${
+              waitingMode === m
+                ? 'bg-violet-700 border-violet-500 text-white'
+                : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            {m === 'baseline' ? 'Baseline (historical)' : 'ML model (synthetic)'}
+          </button>
+        ))}
+        <span className="text-slate-600 text-[10px]">
+          {waitingMode === 'ml'
+            ? '· waiting_rf_v1 · Synthetic training data'
+            : '· waiting_baseline_v1 · Historical records'}
+        </span>
+      </div>
+
+      {/* ── Routing recommendation card ──────────────────────────────────────── */}
+      <div
+        className="rounded-lg border border-slate-700 bg-slate-800/60 p-4"
+        data-testid="routing-card"
+      >
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-slate-100 font-medium text-sm">Routing Recommendation</h2>
+          <span className="text-slate-600 text-[10px]">Synthetic data · rule-based · not a real navigational instruction</span>
+        </div>
+        {routingError ? (
+          <p className="text-red-400 text-xs" data-testid="routing-error">{routingError}</p>
+        ) : routing === null ? (
+          <p className="text-slate-500 text-xs" data-testid="routing-loading">
+            {waitingTimes && waitingTimes.vessels.length > 0
+              ? 'Loading recommendation…'
+              : 'No vessel data to evaluate.'}
+          </p>
+        ) : (
+          <div data-testid="routing-result">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className={`px-2 py-0.5 text-[10px] font-medium rounded border ${
+                  routing.recommended
+                    ? 'bg-teal-900/40 text-teal-300 border-teal-700'
+                    : 'bg-slate-700 text-slate-400 border-slate-600'
+                }`}
+                data-testid="routing-badge"
+              >
+                {routing.recommended
+                  ? `Divert → ${routing.recommended_port_name}`
+                  : 'Stay at current port'}
+              </span>
+              {routing.estimated_hours_saved > 0 && (
+                <span className="text-slate-400 text-[10px]">
+                  ~{routing.estimated_hours_saved.toFixed(1)} h saved
+                </span>
+              )}
+            </div>
+            <p className="text-slate-400 text-[11px] mt-1.5 leading-relaxed" data-testid="routing-reason">
+              {routing.reason}
+            </p>
+            <p className="text-slate-600 text-[10px] mt-1">
+              For: {routing.vessel_name} · Threshold: {routing.diversion_threshold_hours} h ·{' '}
+              <span className="text-amber-600">Synthetic training data</span>
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Two-column layout: waiting-times + berths ────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ── Affected vessels table ──────────────────────────────────────── */}
+        {/* ── Affected vessels table (waiting-time predictions) ───────────── */}
         <div className="lg:col-span-2 rounded-lg border border-slate-700 bg-slate-800/60 p-4">
-          <h2 className="text-slate-100 font-medium text-sm mb-3">
-            Affected Vessels
-          </h2>
-          {schedules && schedules.schedules.length > 0 ? (
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-slate-100 font-medium text-sm">
+              Affected Vessels
+            </h2>
+            {waitingTimes && (
+              <span className="text-slate-500 text-[10px]" data-testid="waiting-method-label">
+                {waitingTimes.calculation_method}
+                {waitingMode === 'ml' && (
+                  <span className="ml-1 text-amber-500">· Synthetic training data</span>
+                )}
+              </span>
+            )}
+          </div>
+          {waitingTimes && waitingTimes.vessels.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs" data-testid="vessels-table">
+                <thead>
+                  <tr className="text-slate-500 border-b border-slate-700">
+                    <th className="text-left py-1.5 pr-3 font-medium">Vessel</th>
+                    <th className="text-left py-1.5 pr-3 font-medium">ETA</th>
+                    <th className="text-left py-1.5 pr-3 font-medium">Priority</th>
+                    <th className="text-left py-1.5 pr-3 font-medium">Risk</th>
+                    <th className="text-left py-1.5 pr-3 font-medium">Pred. Wait</th>
+                    <th className="text-left py-1.5 font-medium">Primary Cause</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {waitingTimes.vessels.slice(0, 12).map(v => (
+                    <tr
+                      key={v.schedule_id}
+                      className="border-b border-slate-700/50 hover:bg-slate-700/30"
+                    >
+                      <td className="py-1.5 pr-3 text-slate-200 font-medium truncate max-w-[120px]">
+                        {v.vessel_name}
+                      </td>
+                      <td className="py-1.5 pr-3 text-slate-400">
+                        {new Date(v.eta).toLocaleString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                            v.priority === 1
+                              ? 'bg-red-900/40 text-red-300'
+                              : v.priority === 2
+                              ? 'bg-orange-900/30 text-orange-300'
+                              : 'bg-slate-700 text-slate-400'
+                          }`}
+                        >
+                          {priorityLabel(v.priority)}
+                        </span>
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${riskBadge(v.risk_level)}`}>
+                          {v.risk_level}
+                        </span>
+                      </td>
+                      <td className="py-1.5 pr-3 text-slate-300 font-medium">
+                        {v.predicted_waiting_hours < 1
+                          ? `${Math.round(v.predicted_waiting_hours * 60)}m`
+                          : `${v.predicted_waiting_hours.toFixed(1)}h`}
+                      </td>
+                      <td className="py-1.5 text-slate-500 text-[10px]">
+                        {v.primary_cause ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : schedules && schedules.schedules.length > 0 ? (
+            /* Fallback: render schedule data if waitingTimes is null (e.g. 503) */
             <div className="overflow-x-auto">
               <table className="w-full text-xs" data-testid="vessels-table">
                 <thead>
@@ -509,6 +732,116 @@ export default function DashboardPage() {
             <p className="text-slate-500 text-xs">No berth data available.</p>
           )}
         </div>
+      </div>
+
+      {/* ── Two-column layout: Berth Map + Alerts ────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ── Port Operations Map (berth schematic) ──────────────────────── */}
+        <div
+          className="rounded-lg border border-slate-700 bg-slate-800/60 p-4"
+          data-testid="berth-map-panel"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-slate-100 font-medium text-sm">Port Operations Map</h2>
+            <span className="text-slate-600 text-[10px]">Berth schematic · not GPS</span>
+          </div>
+          <BerthLayoutMap
+            berths={berths?.berths ?? []}
+          />
+        </div>
+
+        {/* ── Operational Alerts ──────────────────────────────────────────── */}
+        <div
+          className="rounded-lg border border-slate-700 bg-slate-800/60 p-4"
+          data-testid="alerts-panel"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-slate-100 font-medium text-sm">Operational Alerts</h2>
+            <span className="text-slate-600 text-[10px]">Derived from API data · synthetic</span>
+          </div>
+          <AlertsPanel alerts={alerts} />
+        </div>
+      </div>
+
+      {/* ── Copilot panel ────────────────────────────────────────────────────── */}
+      <div
+        className="rounded-lg border border-slate-700 bg-slate-800/60 p-4"
+        data-testid="copilot-panel"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-slate-100 font-medium text-sm">AI Copilot</h2>
+          <span className="text-slate-600 text-[10px]">
+            Explains PortFlow results · Synthetic data ·{' '}
+            {copilotResponse
+              ? copilotResponse.method === 'ibm_bob_llm'
+                ? 'IBM Bob LLM'
+                : 'rules_fallback'
+              : 'rules_fallback'}
+          </span>
+        </div>
+
+        {/* Suggested questions */}
+        <div className="flex flex-wrap gap-1.5 mb-3" data-testid="copilot-suggestions">
+          {SUGGESTED_QUESTIONS.map(q => (
+            <button
+              key={q}
+              onClick={() => { setCopilotQuestion(q); askCopilot(q) }}
+              className="px-2 py-1 text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded border border-slate-600 transition-colors"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+
+        {/* Text input */}
+        <div className="flex gap-2 mb-3">
+          <input
+            data-testid="copilot-input"
+            type="text"
+            value={copilotQuestion}
+            onChange={e => setCopilotQuestion(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') askCopilot(copilotQuestion) }}
+            placeholder="Ask about current port conditions…"
+            className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+          />
+          <button
+            data-testid="copilot-ask-btn"
+            onClick={() => askCopilot(copilotQuestion)}
+            disabled={copilotLoading}
+            className="px-4 py-1.5 bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-white text-xs rounded transition-colors"
+          >
+            {copilotLoading ? 'Asking…' : 'Ask'}
+          </button>
+        </div>
+
+        {/* Response area */}
+        {copilotLoading && (
+          <p className="text-slate-400 text-xs animate-pulse" data-testid="copilot-loading">
+            Generating explanation…
+          </p>
+        )}
+        {copilotError && (
+          <p className="text-red-400 text-xs" data-testid="copilot-error">
+            {copilotError}
+          </p>
+        )}
+        {!copilotLoading && !copilotError && copilotResponse && (
+          <div data-testid="copilot-response">
+            <div className="bg-slate-700/40 rounded p-3 text-xs text-slate-300 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
+              {copilotResponse.answer}
+            </div>
+            <p className="text-slate-600 text-[10px] mt-1.5">
+              Method: <span data-testid="copilot-method">{copilotResponse.method}</span>
+              {' '}·{' '}
+              <span className="text-amber-600">Synthetic demo data — not a real operational instruction</span>
+            </p>
+          </div>
+        )}
+        {!copilotLoading && !copilotError && !copilotResponse && (
+          <p className="text-slate-600 text-[10px]" data-testid="copilot-idle">
+            Click a suggested question or type your own to get an explanation.
+          </p>
+        )}
       </div>
 
       {/* ── Footer disclosure ────────────────────────────────────────────────── */}

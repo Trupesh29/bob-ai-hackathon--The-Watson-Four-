@@ -49,15 +49,19 @@ def _check_env_safe_for_reset() -> None:
 
 
 def _reset_tables(session: Session) -> None:
-    """Truncate all PortFlow tables in dependency order."""
-    session.execute(text("TRUNCATE historical_operations CASCADE"))
-    session.execute(text("TRUNCATE vessel_schedules CASCADE"))
-    session.execute(text("TRUNCATE cranes CASCADE"))
-    session.execute(text("TRUNCATE berths CASCADE"))
-    session.execute(text("TRUNCATE vessels CASCADE"))
-    session.execute(text("TRUNCATE ports CASCADE"))
+    """Clear all PortFlow tables in dependency order."""
+    if session.bind and session.bind.dialect.name == "sqlite":
+        for table in reversed(Base.metadata.sorted_tables):
+            session.execute(table.delete())
+    else:
+        session.execute(text("TRUNCATE historical_operations CASCADE"))
+        session.execute(text("TRUNCATE vessel_schedules CASCADE"))
+        session.execute(text("TRUNCATE cranes CASCADE"))
+        session.execute(text("TRUNCATE berths CASCADE"))
+        session.execute(text("TRUNCATE vessels CASCADE"))
+        session.execute(text("TRUNCATE ports CASCADE"))
     session.commit()
-    print("Tables truncated (reset).")
+    print("Tables cleared (reset).")
 
 
 def seed(reset: bool = False) -> None:

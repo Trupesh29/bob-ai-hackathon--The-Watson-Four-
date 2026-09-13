@@ -1,0 +1,23 @@
+{
+  "name": "portflow-mcp",
+  "version": "0.1.0",
+  "description": "PortFlow AI — IBM Bob MCP server. Read-only tools for explaining congestion predictions, waiting-time forecasts, and operations plans.",
+  "type": "module",
+  "main": "./build/index.js",
+  "bin": {
+    "portflow-mcp": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "node build/index.js"
+  },
+  "files": ["build"],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

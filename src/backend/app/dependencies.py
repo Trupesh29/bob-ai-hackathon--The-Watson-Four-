@@ -22,13 +22,16 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .core.config import settings
 
-# pool_pre_ping tests the connection before use, handling stale connections
-# from Render-style managed PostgreSQL instances.
+_connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
 _engine = create_engine(
     settings.database_url,
-    pool_pre_ping=True,
+    pool_pre_ping=not settings.database_url.startswith("sqlite"),
+    connect_args=_connect_args,
     echo=False,  # never log SQL containing credentials
 )
+
+from .models import Base  # noqa: E402
+Base.metadata.create_all(bind=_engine)
 
 _SessionLocal = sessionmaker(
     bind=_engine,
