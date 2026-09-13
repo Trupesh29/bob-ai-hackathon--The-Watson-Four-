@@ -347,25 +347,221 @@ and synthetic data generator with 5 scenarios.
 
 ---
 
-## Next Task — Plan 4
+## Session: Plan 4 — End-to-End Dashboard Slice
 
-**Goal:** Implement Pydantic v2 schemas and CRUD REST endpoints for vessels, berths,
-and vessel schedules.  Connect the database to the API.  No ML or CP-SAT yet.
+**Date:** 2026-09-13
+**Goal:** Implement the smallest honest end-to-end PortFlow dashboard slice —
+connecting seeded PostgreSQL records through FastAPI to a React dashboard with a
+Recharts congestion chart. No fake ML, no fake optimizer claims.
+
+### Context
+
+Plans 1–3 established documentation, the application skeleton, ORM models,
+Alembic migration, and the synthetic data generator/seeder.
+Plan 4 wires the database to the API and the API to the React dashboard.
+
+### Completed Work
+
+#### Backend
+
+| File | Action | Notes |
+|---|---|---|
+| `src/backend/app/schemas/dashboard.py` | Created | Pydantic v2 schemas for all 6 endpoints; `CALCULATION_METHOD = "baseline_rule_v1"`; `VALID_SCENARIOS` set |
+| `src/backend/app/services/__init__.py` | Created | Package marker |
+| `src/backend/app/services/congestion.py` | Created | Full `baseline_rule_v1` implementation — piecewise-linear risk, scenario multipliers, 6-hour buckets, SQLite-safe UUID helper |
+| `src/backend/app/api/v1/dashboard.py` | Created | `GET /api/v1/dashboard/summary` and `GET /api/v1/dashboard/congestion` |
+| `src/backend/app/api/v1/schedules.py` | Created | `GET /api/v1/schedules` — vessel join, berth compatibility count, waiting minutes from historical ops |
+| `src/backend/app/api/v1/resources.py` | Created | `GET /api/v1/resources/berths`, `/cranes`, `/scenarios` |
+| `src/backend/app/main.py` | Updated | Registered 3 new routers (dashboard, schedules, resources) |
+| `src/backend/tests/test_dashboard.py` | Created | 18 tests: summary 200, KPI fields, 12-window congestion, prob 0–1 range, invalid scenario 422, no DB mutation on scenario change, schedule filter by port/date, berths/cranes/scenarios endpoints, calculation_method label |
+
+#### Frontend
+
+| File | Action | Notes |
+|---|---|---|
+| `src/frontend/src/types/api.ts` | Updated | Full typed interfaces: `DashboardSummaryResponse`, `DashboardCongestionResponse`, `ScheduleItem`, `BerthItem`, `CraneItem`, `ScenarioId`, `ScenariosResponse`, `ApiError` |
+| `src/frontend/src/services/api.ts` | Updated | Typed API client: `apiFetch<T>()`, `ApiRequestError` class, `fetchDashboardSummary()`, `fetchDashboardCongestion()`, `fetchSchedules()`, `fetchBerths()`, `fetchCranes()`, `fetchScenarios()`, `DEFAULT_PORT_CODE` |
+| `src/frontend/src/pages/DashboardPage.tsx` | Updated | Full dashboard: operational header, synthetic-data label, scenario selector (5 buttons), KPI cards (5), Recharts BarChart congestion chart, affected vessels table, berth status panel, footer disclosure; states: loading, error, empty, ready |
+| `src/frontend/src/test-setup.ts` | Created | Vitest + jsdom global setup |
+| `src/frontend/vitest.config.ts` | Created | Separate vitest config with jsdom environment and pool:threads |
+| `src/frontend/src/tests/DashboardPage.test.tsx` | Created | 7 tests: loading state, error state, synthetic label, scenario sends correct API query, KPI values from API, chart receives real series data, no ML claims |
+| `src/frontend/package.json` | Updated | Added `recharts`, `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `jsdom`, `msw`; added `test` script |
+| `src/frontend/vite.config.ts` | Updated | Removed `test` block (moved to vitest.config.ts to avoid type conflicts) |
+| `src/frontend/tsconfig.app.json` | Updated | Added `types: ["vite/client"]`; excluded test files from app compilation |
+| `src/frontend/tsconfig.node.json` | Updated | Added vitest types; included `vitest.config.ts` |
+
+#### Documentation
+
+| File | Action | Notes |
+|---|---|---|
+| `docs/submission-readiness.md` | Updated | All Plan 4 endpoints and tests marked Complete; backend count 34 passed 1 skipped; frontend 7 passed |
+| `docs/setup-guide.md` | Updated | Plan 4 status, API endpoint curl examples, `baseline_rule_v1` formula, local run commands |
+| `src/README.md` | Updated | Directory structure with new files; quick commands with Plan 4 entries |
+| `docs/AI_HANDOFF.md` | Updated | This Plan 4 session record |
+
+### Validation Performed
+
+| Check | Result |
+|---|---|
+| `python -m pytest backend/tests/ -q` (from `src/`) | ✅ **34 passed, 1 skipped** |
+| `npm test` (from `src/frontend/`) | ✅ **7 passed** |
+| `npm run build` (from `src/frontend/`) | ✅ `✓ built in 6.11s`; `dist/index.html` 0.43 kB |
+| `GET /api/v1/health` | ✅ `{"status":"healthy","service":"portflow-api","version":"0.1.0"}` |
+| No ML claim in dashboard text | ✅ All labels say "Baseline rule — ML model pending" |
+| No fake optimizer claim | ✅ "Optimization pending" label used throughout |
+| Five scenarios deterministic (no DB mutation) | ✅ Test `test_scenario_does_not_mutate_source_records` passes |
+| Risk probability always in [0, 1] | ✅ Test `test_risk_probability_bounds` passes |
+| `calculation_method = "baseline_rule_v1"` in all prediction-like responses | ✅ All endpoints verified |
+| `is_synthetic = true` in all API responses | ✅ Confirmed in schema constants |
+| `.github/workflows/validate.yml` unchanged | ✅ |
+| No `.env` files staged | ✅ |
+| `git diff --check` | ✅ No trailing whitespace |
+
+### baseline_rule_v1 Formula
+
+The congestion risk calculation is entirely rule-based and deterministic.
+It is not a trained statistical model and makes no accuracy claims.
+
+**Inputs per 6-hour bucket:**
+
+```
+arrivals       = vessel schedules with ETA in [bucket_start, bucket_end)
+capacity       = compatible available berths
+occupancy_rate = 1 - min(arrivals / max(capacity, 1), 1)
+crane_ratio    = available_cranes / max(total_cranes, 1)
+workload       = sum(expected_containers) for arrivals in bucket
+raw_load       = arrivals / max(capacity, 1)
+```
+
+**Piecewise risk probability:**
+
+```
+if raw_load <= 0:       risk_prob = 0.05
+elif raw_load <= 0.5:   risk_prob = 0.05 + 0.30 * (raw_load / 0.5)
+elif raw_load <= 1.0:   risk_prob = 0.35 + 0.35 * ((raw_load - 0.5) / 0.5)
+elif raw_load <= 1.5:   risk_prob = 0.70 + 0.25 * ((raw_load - 1.0) / 0.5)
+else:                   risk_prob = 0.95
+
+risk_prob = min(1.0, risk_prob * crane_penalty)
+```
+
+**crane_penalty:** `max(0.5, 2.0 - crane_ratio)` (up to 2× amplification
+when no cranes available; 0.5 floor when full crane capacity).
+
+**Risk levels:** low < 0.35 · medium < 0.60 · high < 0.80 · critical ≥ 0.80
+
+**Scenario multipliers (applied before piecewise):**
+
+| Scenario | Arrivals multiplier | Capacity multiplier |
+|---|---|---|
+| baseline | 1.0 | 1.0 |
+| arrival_surge | 2.0 | 1.0 |
+| crane_outage | 1.0 | 1.0 (cranes halved) |
+| berth_closure | 1.0 | 0.5 |
+| handling_slowdown | 1.0 | 1.0 (crane_penalty × 1.5) |
+
+Scenarios are computed views — source records are never overwritten.
+
+### New API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/dashboard/summary` | Port KPIs, peak risk, scenario, `is_synthetic`, `calculation_method` |
+| GET | `/api/v1/dashboard/congestion` | 12 × 6-hour windows with probability, risk level, queue estimate |
+| GET | `/api/v1/schedules` | Vessel arrival schedule with berth compatibility count |
+| GET | `/api/v1/resources/berths` | Berth inventory for the requested port |
+| GET | `/api/v1/resources/cranes` | Crane inventory for the requested port |
+| GET | `/api/v1/scenarios` | List of 5 valid scenario options with descriptions |
+
+All endpoints accept `?port_code=FKPFL` (required).
+Dashboard and congestion endpoints also accept `?scenario=baseline` (default) and
+`?horizon_hours=72` (default).
+
+### Known Issues / Caveats
+
+1. **Python 3.14 runtime:** `.python-version` specifies `3.12` but only 3.14 is
+   installed. All code works on 3.14. Recreate venv with Python 3.12 before final
+   submission.
+
+2. **SQLite/UUID incompatibility in tests:** `sqlalchemy.dialects.postgresql.UUID`
+   breaks on SQLite via `insertmanyvalues RETURNING` and ORM deserialization.
+   Fixed via: `use_insertmanyvalues=False` on the test engine,
+   `join_transaction_mode="create_savepoint"`, and `cast(column, String)` in all
+   queries touching UUID columns. Test fixture uses `session.add()` not
+   `session.merge()` to avoid the RETURNING path.
+
+3. **Synthetic data base time:** The seeder uses `datetime(2026, 9, 15, 6, 0, 0, tzinfo=UTC)`
+   as the schedule base time. If tested after this date, "next 24 hours" logic in
+   the summary may show 0 arrivals (schedules are in the past). The congestion
+   service uses `func.min(VesselSchedule.eta)` as the horizon start, so it remains
+   functional. This will be corrected when a real-time AIS feed is integrated.
+
+4. **Recharts chunk size warning:** Bundle is 571 kB uncompressed (174 kB gzipped).
+   Vite emits a `chunkSizeWarningLimit` warning. The build still passes. Code-split
+   Recharts in a future cleanup pass.
+
+5. **PostgreSQL integration test skipped:** `test_seed_idempotent_postgresql`
+   requires `DATABASE_URL` pointing to a real PostgreSQL instance.
+
+6. **`docs/DATA_DICTIONARY.md`** still describes the original Plan 1 schema.
+   Update to match the Plan 3/4 implementation is deferred to a future plan.
+
+### Contract Changes
+
+| Change | Justification | Documented |
+|---|---|---|
+| `baseline_rule_v1` label replaces any reference to "ML prediction" | Plan 4 spec forbids ML claims; the method is purely rule-based | All API response schemas, UI labels, setup-guide |
+| `calculation_method` field added to all prediction-like responses | Plan 4 spec requirement | `src/backend/app/schemas/dashboard.py` |
+| `is_synthetic: true` field added to all responses | Plan 4 spec requirement | All API schemas |
+| Scenario selection is a query parameter, not a DB state change | Scenarios are deterministic views; source records must never be overwritten | `src/backend/app/services/congestion.py` |
+| 6 new API endpoints under `/api/v1/` | Plan 4 spec requirement | `src/backend/app/api/v1/`, `docs/API_CONTRACT.md` should be updated next |
+
+---
+
+## Next Task — Plan 5
+
+**Goal:** Implement scikit-learn ML congestion prediction pipeline and OR-Tools
+CP-SAT berth allocation solver.
 
 **Scope:**
-1. Pydantic v2 request/response schemas for all entities in `docs/API_CONTRACT.md`.
-2. CRUD route handlers: `GET /api/v1/vessels`, `GET /api/v1/berths`, `GET /api/v1/ports`.
-3. Database session injection via `get_db()` dependency.
-4. Update `docs/DATA_DICTIONARY.md` to match the Plan 3 schema.
-5. pytest tests for at least the vessels and berths endpoints.
+1. `src/backend/app/ml/` — Feature engineering from synthetic data, scikit-learn
+   RandomForestRegressor training, joblib serialisation, `predict_congestion()` service.
+2. `src/backend/app/optimiser/` — OR-Tools CP-SAT berth/crane allocation,
+   `optimise_allocations()` service, deterministic result schema.
+3. Replace `baseline_rule_v1` outputs with ML predictions where confidence
+   threshold is met; retain `baseline_rule_v1` as the fallback.
+4. `GET /api/v1/predictions` endpoint — replaces or supplements dashboard congestion.
+5. `POST /api/v1/plans/optimise` endpoint — returns CP-SAT allocation proposal.
+6. `POST /api/v1/plans/{plan_id}/approve` and `/reject` — human approval gate.
+7. Frontend: Predictions page and Optimizer page wired to real endpoints.
+8. Backend tests: ML prediction range, CP-SAT feasibility, approval flow.
 
-**Before starting Plan 4, read:**
-- `docs/AI_HANDOFF.md` (this document)
+**Before starting Plan 5, read:**
+- `docs/AI_HANDOFF.md` (this document, especially Plan 4 caveats)
 - `docs/API_CONTRACT.md`
 - `docs/DEFINITION_OF_DONE.md`
+- `src/backend/app/services/congestion.py` (baseline to replace/extend)
 - `src/backend/app/models/` (all 6 model files)
 
-**Do NOT implement in Plan 4:**
-- ML pipeline
-- CP-SAT solver
-- Frontend changes beyond API type updates
+**Do NOT implement in Plan 5:**
+- IBM Bob MCP server (Plan 6)
+- Real AIS data integration
+- Authentication
+- Kubernetes / deployment
+- Any change to `.github/workflows/validate.yml`
+
+---
+
+## IBM Bob Evidence — Human Action Required
+
+At the end of this session:
+
+1. Export this IBM Bob task history as Markdown.
+2. Capture the IBM Bob task-consumption summary screenshot.
+3. Remove any secrets or personal data from the export.
+4. Save both files under `bob_sessions/` with filenames:
+   - `plan4-session-YYYY-MM-DD.md`
+   - `plan4-session-YYYY-MM-DD-screenshot.png`
+
+Do not fabricate these artifacts. Export them from the IBM Bob IDE after this
+task is complete.

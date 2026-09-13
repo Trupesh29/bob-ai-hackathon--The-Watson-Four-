@@ -1,8 +1,9 @@
 # Setup Guide — PortFlow AI
 
-> **Status (Plan 3):** FastAPI health endpoint, SQLAlchemy ORM models, Alembic migrations,
-> and synthetic data generator are implemented.
-> ML pipeline and OR-Tools optimiser are not yet implemented (Plans 4–5).
+> **Status (Plan 4):** FastAPI health endpoint, SQLAlchemy ORM models, Alembic migrations,
+> synthetic data generator, dashboard API endpoints, and React dashboard are implemented.
+> `baseline_rule_v1` congestion calculator is live — not a trained ML model.
+> ML pipeline and OR-Tools optimiser are not yet implemented (Plans 5–6).
 > Repository URL is pending (see `submission.yaml`).
 
 ---
@@ -120,6 +121,49 @@ curl http://localhost:8000/api/v1/health
 # Expected: {"status": "healthy", "service": "portflow-api", "version": "0.1.0"}
 ```
 
+**Plan 4 dashboard API endpoints (require seeded data):**
+
+```bash
+# Dashboard KPI summary
+curl "http://localhost:8000/api/v1/dashboard/summary?port_code=FKPFL"
+
+# 72-hour congestion horizon (12 × 6-hour windows, baseline_rule_v1)
+curl "http://localhost:8000/api/v1/dashboard/congestion?port_code=FKPFL"
+
+# With a scenario
+curl "http://localhost:8000/api/v1/dashboard/congestion?port_code=FKPFL&scenario=arrival_surge"
+
+# Vessel schedules
+curl "http://localhost:8000/api/v1/schedules?port_code=FKPFL"
+
+# Berths and cranes
+curl "http://localhost:8000/api/v1/resources/berths?port_code=FKPFL"
+curl "http://localhost:8000/api/v1/resources/cranes?port_code=FKPFL"
+
+# Available scenarios
+curl "http://localhost:8000/api/v1/scenarios"
+```
+
+**Scenario options:** `baseline`, `arrival_surge`, `crane_outage`, `berth_closure`, `handling_slowdown`
+
+**baseline_rule_v1 formula (transparent, deterministic — not ML):**
+
+```
+For each 6-hour bucket in the 72-hour horizon:
+  occupancy = arrivals_in_bucket / operational_berth_count
+  adjusted  = min(2.0, occupancy × scenario_multiplier)
+  normalised = min(1.0, adjusted)
+  risk_probability = piecewise_linear(normalised)
+  risk_level = low(<0.4) | medium(<0.7) | high(<0.9) | critical(≥0.9)
+  estimated_queue = max(0, arrivals - berths)
+
+Scenario multipliers:
+  baseline: 1.0  arrival_surge: 1.5  crane_outage: 1.3
+  berth_closure: 1.4  handling_slowdown: 1.2
+```
+
+This formula does NOT claim statistical accuracy or trained-model confidence.
+
 **Interactive API docs:**
 Open `http://localhost:8000/api/v1/docs` in a browser (Swagger UI).
 
@@ -178,6 +222,11 @@ ls app/ml/models/
 ```bash
 # Backend unit and integration tests (from src/)
 python -m pytest backend/tests -q
+# Expected: 34 passed, 1 skipped
+
+# Frontend unit tests (from src/frontend/)
+npm test
+# Expected: 7 passed
 
 # Frontend type check (from src/frontend/)
 npm run typecheck

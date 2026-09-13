@@ -16,6 +16,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.v1.health import router as health_router
+from .api.v1.dashboard import router as dashboard_router
+from .api.v1.schedules import router as schedules_router
+from .api.v1.resources import router as resources_router
 from .core.config import settings
 from .core.errors import generic_exception_handler, validation_exception_handler
 
@@ -53,6 +56,9 @@ def create_app() -> FastAPI:
 
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(health_router, prefix=settings.api_v1_prefix)
+    app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
+    app.include_router(schedules_router, prefix=settings.api_v1_prefix)
+    app.include_router(resources_router, prefix=settings.api_v1_prefix)
 
     logger.info(
         "PortFlow AI API started | env=%s | version=%s",

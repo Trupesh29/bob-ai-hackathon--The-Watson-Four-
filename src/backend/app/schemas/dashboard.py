@@ -1,0 +1,176 @@
+"""
+Pydantic v2 schemas for /api/v1/dashboard/* endpoints.
+
+All responses include:
+  - is_synthetic: True  (all data is synthetic demo data)
+  - calculation_method: "baseline_rule_v1"  (never claims ML/statistical confidence)
+
+These schemas are the single source of truth for dashboard API types.
+They must be kept in sync with src/frontend/src/types/api.ts.
+"""
+
+from __future__ import annotations
+
+from typing import List, Optional
+from pydantic import BaseModel, Field
+
+
+CALCULATION_METHOD = "baseline_rule_v1"
+VALID_SCENARIOS = {"baseline", "arrival_surge", "crane_outage", "berth_closure", "handling_slowdown"}
+
+
+class DashboardSummaryResponse(BaseModel):
+    """
+    Response for GET /api/v1/dashboard/summary.
+
+    Provides a real-time snapshot of port operations derived from seeded
+    PostgreSQL records. All KPI values come from the database — no values
+    are hardcoded or invented.
+    """
+
+    # Port identity
+    port_code: str
+    port_name: str
+
+    # Vessel counts (read from vessel_schedules)
+    active_vessel_count: int = Field(description="Vessels with status in ('scheduled','in_port')")
+    arrivals_next_24h: int = Field(description="Vessels with ETA within next 24 hours of now")
+
+    # Infrastructure utilisation (read from berths/cranes)
+    berth_occupancy_pct: float = Field(description="Occupied berths / total berths * 100")
+    available_crane_count: int = Field(description="Cranes with status='operational'")
+
+    # Congestion summary (derived by baseline_rule_v1)
+    peak_congestion_risk: float = Field(description="Highest risk_probability across the 72h horizon (0–1)")
+    peak_risk_level: str = Field(description="low | medium | high | critical")
+    avg_estimated_waiting_minutes: float = Field(
+        description="Average baseline estimated waiting time across upcoming vessels"
+    )
+    critical_vessel_count: int = Field(description="Vessels with priority=1 (highest priority)")
+
+    # Scenario and provenance
+    selected_scenario: str
+    is_synthetic: bool = True
+    calculation_method: str = CALCULATION_METHOD
+
+
+class CongestionWindowResponse(BaseModel):
+    """One 6-hour time window in the congestion horizon."""
+
+    window_start: str = Field(description="ISO 8601 UTC start of 6-hour bucket")
+    window_end: str = Field(description="ISO 8601 UTC end of 6-hour bucket")
+    risk_probability: float = Field(description="Congestion risk 0.0–1.0")
+    risk_level: str = Field(description="low | medium | high | critical")
+    estimated_queue_count: int = Field(description="Estimated vessels waiting for a berth")
+    affected_schedule_ids: List[str] = Field(description="UUIDs of schedules falling in this window")
+    rule_drivers: List[str] = Field(description="Top factors driving this bucket's risk")
+
+
+class DashboardCongestionResponse(BaseModel):
+    """
+    Response for GET /api/v1/dashboard/congestion.
+
+    Returns 12 × 6-hour windows covering the 72-hour horizon.
+    risk_probability is computed by baseline_rule_v1 — a transparent
+    deterministic rule applied to seeded data. No ML model is involved.
+    """
+
+    port_code: str
+    horizon_hours: int = Field(description="Length of planning horizon (default 72)")
+    windows: List[CongestionWindowResponse]
+    selected_scenario: str
+    is_synthetic: bool = True
+    calculation_method: str = CALCULATION_METHOD
+
+
+class ScheduleResponse(BaseModel):
+    """One row in the schedules list."""
+
+    schedule_id: str
+    vessel_name: str
+    imo_number: str
+    eta: str = Field(description="ISO 8601 UTC")
+    etd: Optional[str] = None
+    expected_containers: int
+    cargo_type: str
+    priority: int = Field(description="1=highest, 5=lowest")
+    preferred_berth_code: Optional[str] = None
+    status: str
+    is_synthetic: bool = True
+    # Compatibility derived fields
+    compatible_berth_count: Optional[int] = Field(
+        default=None,
+        description="Number of port berths physically compatible with this vessel"
+    )
+    estimated_waiting_minutes: Optional[int] = Field(
+        default=None,
+        description="Baseline rule estimate from historical_operations record"
+    )
+
+
+class SchedulesResponse(BaseModel):
+    """Response for GET /api/v1/schedules."""
+
+    port_code: str
+    scenario: str
+    schedules: List[ScheduleResponse]
+    total: int
+    is_synthetic: bool = True
+
+
+class BerthResponse(BaseModel):
+    """One berth in the resource list."""
+
+    berth_id: str
+    berth_code: str
+    berth_name: str
+    max_length_m: float
+    max_draft_m: float
+    max_cranes: int
+    status: str
+    occupancy_status: str = Field(description="free | occupied | maintenance")
+    crane_count: int = Field(description="Number of cranes assigned to this berth")
+
+
+class BerthsResponse(BaseModel):
+    """Response for GET /api/v1/resources/berths."""
+
+    port_code: str
+    berths: List[BerthResponse]
+    total: int
+    is_synthetic: bool = True
+
+
+class CraneResponse(BaseModel):
+    """One crane in the resource list."""
+
+    crane_id: str
+    crane_code: str
+    berth_code: Optional[str] = None
+    moves_per_hour: float
+    status: str
+
+
+class CranesResponse(BaseModel):
+    """Response for GET /api/v1/resources/cranes."""
+
+    port_code: str
+    cranes: List[CraneResponse]
+    total: int
+    available_count: int
+    is_synthetic: bool = True
+
+
+class ScenarioInfo(BaseModel):
+    """Metadata for one available scenario."""
+
+    scenario_id: str
+    label: str
+    description: str
+
+
+class ScenariosResponse(BaseModel):
+    """Response for GET /api/v1/scenarios."""
+
+    scenarios: List[ScenarioInfo]
+    default_scenario: str = "baseline"

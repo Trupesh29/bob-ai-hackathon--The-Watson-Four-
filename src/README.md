@@ -2,7 +2,8 @@
 
 All PortFlow AI application code lives under this directory.
 
-**Plan 3 status:** SQLAlchemy ORM models, Alembic migrations, and synthetic data generator implemented.
+**Plan 4 status:** Dashboard API (6 endpoints), `baseline_rule_v1` congestion service, React dashboard
+with Recharts congestion chart, 34 backend tests + 7 frontend tests. All data from seeded PostgreSQL.
 
 ---
 
@@ -12,25 +13,31 @@ All PortFlow AI application code lives under this directory.
 src/
 ├── backend/                    # Python FastAPI application
 │   ├── app/
-│   │   ├── api/v1/health.py   # GET /api/v1/health
-│   │   ├── core/config.py     # pydantic-settings (Settings class)
-│   │   ├── core/errors.py     # Global exception handlers
-│   │   ├── models/            # SQLAlchemy 2 ORM models (Plan 3)
+│   │   ├── api/v1/
+│   │   │   ├── health.py       # GET /api/v1/health
+│   │   │   ├── dashboard.py    # GET /api/v1/dashboard/summary, /congestion  ← Plan 4
+│   │   │   ├── schedules.py    # GET /api/v1/schedules                        ← Plan 4
+│   │   │   └── resources.py    # GET /api/v1/resources/berths, /cranes, /scenarios ← Plan 4
+│   │   ├── core/config.py      # pydantic-settings (Settings class)
+│   │   ├── core/errors.py      # Global exception handlers
+│   │   ├── models/             # SQLAlchemy 2 ORM models (Plan 3)
 │   │   │   ├── port.py
 │   │   │   ├── vessel.py
 │   │   │   ├── berth.py
 │   │   │   ├── crane.py
 │   │   │   ├── vessel_schedule.py
 │   │   │   └── historical_operation.py
-│   │   ├── schemas/           # Pydantic v2 schemas (Plan 4)
-│   │   ├── ml/                # scikit-learn inference (Plan 4)
-│   │   ├── optimiser/         # OR-Tools CP-SAT (Plan 5)
-│   │   ├── mcp_server/        # PortFlow MCP server (Plan 6)
-│   │   ├── dependencies.py    # SQLAlchemy session factory (Plan 3)
-│   │   └── main.py            # FastAPI app factory
+│   │   ├── schemas/dashboard.py # Pydantic v2 response schemas      ← Plan 4
+│   │   ├── services/congestion.py # baseline_rule_v1 calculator      ← Plan 4
+│   │   ├── ml/                 # scikit-learn inference (Plan 5)
+│   │   ├── optimiser/          # OR-Tools CP-SAT (Plan 5)
+│   │   ├── mcp_server/         # PortFlow MCP server (Plan 6)
+│   │   ├── dependencies.py     # SQLAlchemy session factory (Plan 3)
+│   │   └── main.py             # FastAPI app factory
 │   ├── tests/
-│   │   ├── test_health.py     # Health endpoint tests
-│   │   └── test_database.py   # ORM, constraint, and seed tests (Plan 3)
+│   │   ├── test_health.py      # 3 health endpoint tests
+│   │   ├── test_database.py    # 13 ORM + seed tests (Plan 3)
+│   │   └── test_dashboard.py   # 18 dashboard API tests               ← Plan 4
 │   ├── requirements.txt
 │   └── .env.example
 ├── database/                   # Alembic configuration (Plan 3)
@@ -44,14 +51,17 @@ src/
 │   ├── seed.py                 # Database seeder (idempotent)
 │   ├── raw/                    # Raw input data (gitignored except .gitkeep)
 │   └── processed/              # Processed data (gitignored except .gitkeep)
-├── frontend/                   # React + Vite + TypeScript (Plan 2)
+├── frontend/                   # React + Vite + TypeScript
 │   └── src/
 │       ├── App.tsx             # Router with 7 routes
 │       ├── components/         # Shell, Sidebar, EmptyState
-│       ├── pages/              # 7 route pages
-│       ├── hooks/              # useApiHealth
-│       └── services/           # apiFetch wrapper
-├── ml/                         # Standalone ML scripts (Plan 4)
+│       ├── pages/
+│       │   ├── DashboardPage.tsx  # Full dashboard — Plan 4  ← Plan 4
+│       │   └── (other pages)
+│       ├── services/api.ts        # Typed API client          ← Plan 4
+│       ├── types/api.ts           # All API response types    ← Plan 4
+│       └── tests/DashboardPage.test.tsx  # 7 UI tests         ← Plan 4
+├── ml/                         # Standalone ML scripts (Plan 5)
 ├── optimizer/                  # Standalone solver scripts (Plan 5)
 ├── mcp-server/                 # Standalone MCP server (Plan 6)
 ├── tests/                      # Integration tests
@@ -88,11 +98,27 @@ python -m data.seed --reset
 # Start the API server
 python -m uvicorn backend.app.main:app --reload --port 8000
 
-# Run all backend tests
+# Run all backend tests (34 passed, 1 skipped)
 python -m pytest backend/tests -v
 
 # Health check
 curl http://localhost:8000/api/v1/health
+
+# Dashboard summary (requires seeded data)
+curl "http://localhost:8000/api/v1/dashboard/summary?port_code=FKPFL"
+
+# 72-hour congestion horizon (baseline_rule_v1, not ML)
+curl "http://localhost:8000/api/v1/dashboard/congestion?port_code=FKPFL"
+```
+
+From `src/frontend/`:
+
+```bash
+# Run frontend tests (7 passed)
+npm test
+
+# Frontend production build
+npm run build
 ```
 
 ---
