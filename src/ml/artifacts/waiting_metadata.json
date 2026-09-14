@@ -1,0 +1,58 @@
+{
+  "model_version": "waiting_rf_v1",
+  "data_source": "synthetic",
+  "data_seed": 2026,
+  "target_column": "actual_waiting_hours",
+  "target_derivation": "berth_start - actual_arrival (seconds / 3600)",
+  "feature_names": [
+    "length_m",
+    "draft_m",
+    "capacity_teu",
+    "expected_containers",
+    "priority",
+    "eta_hour",
+    "day_of_week",
+    "queue_at_arrival",
+    "compatible_berth_count",
+    "total_berths",
+    "total_cranes",
+    "cargo_type",
+    "scenario"
+  ],
+  "forbidden_columns": [
+    "actual_departure",
+    "actual_waiting_hours",
+    "assigned_berth_id",
+    "average_moves_per_hour",
+    "berth_end",
+    "berth_start",
+    "cranes_used",
+    "delay_reason",
+    "service_minutes",
+    "waiting_minutes"
+  ],
+  "train_rows": 30,
+  "val_rows": 6,
+  "test_rows": 8,
+  "train_time_range": {
+    "start": "2026-09-15T06:08:46.194883+00:00",
+    "end": "2026-09-24T06:55:09.795189+00:00"
+  },
+  "test_time_range": {
+    "start": "2026-09-27T06:03:23.784036+00:00",
+    "end": "2026-09-28T05:23:35.569509+00:00"
+  },
+  "metrics": {
+    "val_mae_hours": 7.9874,
+    "test_mae_hours": 18.1751,
+    "test_rmse_hours": 22.4891,
+    "test_r2": -0.5746,
+    "baseline_median_mae_hours": 27.0417
+  },
+  "limitations": [
+    "Synthetic data only (~44 rows); metrics are illustrative.",
+    "Not validated for real-world port operations.",
+    "baseline_rule_v1 remains the API production estimate."
+  ],
+  "random_state": 2026
+}

@@ -1,0 +1,12 @@
+NOT DEPLOYED
+
+The PortFlow AI application has not yet been deployed to a public URL.
+
+To complete this item:
+1. Build the backend (src/backend) and frontend (src/frontend).
+2. Deploy PostgreSQL, FastAPI, and the React build to a public platform
+   (Render, Vercel, or IBM Cloud — see docs/setup-guide.md for details).
+3. Verify the deployment is publicly accessible and functional.
+4. Replace this file's content with the live demo URL.
+5. Update submission.yaml: live_demo_url field.
+6. Update README.md: demo table live-demo-url.txt entry.

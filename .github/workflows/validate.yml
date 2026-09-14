@@ -1,0 +1,110 @@
+name: Validate Submission
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required files exist
+        run: |
+          required_files=(
+            "submission.yaml"
+            "README.md"
+            "src"
+            "docs/problem-statement.md"
+            "docs/solution-overview.md"
+            "docs/architecture.md"
+            "docs/setup-guide.md"
+            "demo/demo-video-link.txt"
+            "demo/live-demo-url.txt"
+            "demo/screenshots"
+            "presentation"
+            "bob_sessions"
+            "CONTRIBUTING.md"
+            ".github/workflows/validate.yml"
+          )
+          all_present=true
+          for f in "${required_files[@]}"; do
+            if [ ! -e "$f" ]; then
+              echo "MISSING: $f"
+              all_present=false
+            else
+              echo "OK: $f"
+            fi
+          done
+          if [ "$all_present" = false ]; then
+            echo "One or more required paths are missing."
+            exit 1
+          fi
+
+      - name: Validate submission.yaml fields
+        run: |
+          python3 - <<'EOF'
+          import yaml, sys
+
+          with open("submission.yaml") as f:
+              data = yaml.safe_load(f)
+
+          required = [
+              "project_name",
+              "track",
+              "problem_statement",
+              "solution_overview",
+              "team",
+              "repository_url",
+              "demo_video_url",
+              "live_demo_url",
+              "key_features",
+              "tech_stack",
+              "ibm_bob_usage",
+              "known_limitations",
+          ]
+
+          errors = []
+          for field in required:
+              if field not in data:
+                  errors.append(f"Missing field: {field}")
+              elif not data[field]:
+                  errors.append(f"Empty field: {field}")
+
+          if data.get("track", "").upper() != "AI":
+              errors.append(f"track must be 'AI', got: {data.get('track')}")
+
+          if errors:
+              for e in errors:
+                  print(f"ERROR: {e}")
+              sys.exit(1)
+          else:
+              print("submission.yaml validation passed.")
+          EOF
+
+      - name: Check README has no template placeholders
+        run: |
+          # Official IBM Bobathon template placeholders that must be replaced
+          placeholders=(
+            "YOUR_PROJECT_NAME"
+            "YOUR_TEAM_NAME"
+            "your-repo-name"
+            "your.email@example.com"
+            "Your Name"
+          )
+          found=false
+          for p in "${placeholders[@]}"; do
+            if grep -q "$p" README.md; then
+              echo "PLACEHOLDER FOUND IN README.md: $p"
+              found=true
+            fi
+          done
+          if [ "$found" = true ]; then
+            exit 1
+          else
+            echo "README.md placeholder check passed."
+          fi

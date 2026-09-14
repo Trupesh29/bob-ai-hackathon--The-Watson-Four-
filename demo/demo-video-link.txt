@@ -1,0 +1,16 @@
+DEMO VIDEO URL PENDING
+
+A demo video showing the complete PortFlow AI prediction → optimisation →
+human-approval flow has not yet been recorded.
+
+To complete this item:
+1. Build and deploy the application (see docs/setup-guide.md).
+2. Record a demo video showing:
+   - Congestion hotspot prediction for a 72-hour horizon
+   - Vessel waiting-time forecasts
+   - Optimised berth and crane assignment plan from OR-Tools CP-SAT
+   - IBM Bob MCP server explaining a risk score
+   - Supervisor approving the plan through the UI
+3. Upload the video to a publicly accessible platform (YouTube, Vimeo, etc.).
+4. Replace this file's content with the public video URL.
+5. Update submission.yaml: demo_video_url field.

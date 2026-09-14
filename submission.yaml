@@ -1,0 +1,70 @@
+# PortFlow AI — IBM Bobathon Submission Metadata
+# Track: AI  |  Problem: L1 Container Congestion Predictor & Port Operations Optimiser
+# IMPORTANT: Do not modify field names or structure — the validator reads this file.
+# Fill in team details and URLs once they are confirmed.
+
+project_name: "PortFlow AI - Container Congestion Predictor & Port Operations Optimiser"
+
+track: "AI"
+
+problem_statement: >
+  L1 — Container Congestion Predictor & Port Operations Optimiser.
+  Port shift supervisors lack the tools to anticipate berth congestion before
+  vessels arrive and to receive an optimised, explainable 72-hour operations
+  plan that they can review and approve without relying on intuition or
+  error-prone spreadsheets.
+
+solution_overview: >
+  PortFlow AI ingests vessel schedules and berth-capacity data, uses a trained
+  scikit-learn regression model to predict vessel waiting times and congestion
+  risk scores, then feeds those predictions into a Google OR-Tools CP-SAT
+  solver to produce jointly optimised berth and crane assignments.  IBM Bob
+  serves as the development IDE and, through a read-only MCP server, explains
+  model outputs and plan summaries in plain language.  The shift supervisor
+  reviews an AI-generated 72-hour plan and must explicitly approve any routing
+  or plan change — no LLM is permitted to calculate assignments or approve
+  consequential actions.
+
+team:
+  - name: "TEAM_MEMBER_NAME_1"          # TODO: replace with real name
+    email: "TEAM_MEMBER_EMAIL_1"        # TODO: replace with real email
+    role: "Lead Engineer"
+  - name: "TEAM_MEMBER_NAME_2"          # TODO: replace with real name
+    email: "TEAM_MEMBER_EMAIL_2"        # TODO: replace with real email
+    role: "ML Engineer"
+
+repository_url: "REPOSITORY_URL_PENDING"   # TODO: set once public repo is created
+
+demo_video_url: "DEMO_VIDEO_URL_PENDING"   # TODO: upload and set before final submission
+
+live_demo_url: "LIVE_DEMO_URL_PENDING"     # TODO: deploy and set before final submission
+
+key_features:
+  - "Congestion hotspot prediction using vessel schedules and berth-capacity data (scikit-learn regression)"
+  - "Vessel waiting-time forecast with confidence interval displayed to the shift supervisor"
+  - "Joint berth and crane assignment optimisation via Google OR-Tools CP-SAT solver"
+  - "72-hour port operations plan with human-approval gate before any plan change takes effect"
+  - "IBM Bob MCP server exposing read-only risk explanations and plan summaries — no LLM-generated schedules"
+
+tech_stack:
+  frontend: "React 18, Vite, TypeScript, Tailwind CSS, React Router, Recharts, Leaflet"
+  backend: "Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2, Alembic, PostgreSQL"
+  ml: "Pandas, NumPy, scikit-learn, Joblib (XGBoost optional if measurably superior)"
+  optimisation: "Google OR-Tools CP-SAT"
+  ai_tool: "IBM Bob (IDE + MCP read-only server for explanations)"
+
+ibm_bob_usage: >
+  IBM Bob is the primary development IDE throughout the project.  Relevant task
+  histories and task-consumption screenshots are exported to bob_sessions/.
+  A PortFlow MCP server exposes structured, safe, read-only tools so Bob can
+  explain congestion risk and plan summaries in natural language.  Bob does not
+  calculate berth or crane assignments, fabricate predictions, or approve
+  operations plans.
+
+known_limitations:
+  - "Synthetic seed-driven data used; no live AIS or port-operator feed integrated in MVP"
+  - "Single container terminal scope — multi-terminal optimisation is out of scope for MVP"
+  - "Alternate routing recommendations are advisory only; no live voyage-routing API"
+  - "Team details, demo video, and public deployment URL to be filled before final submission"
+
+submission_deadline: "2026-09-15T23:45:00"   # organiser window 12:00 PM–11:45 PM; confirm timezone with organiser
