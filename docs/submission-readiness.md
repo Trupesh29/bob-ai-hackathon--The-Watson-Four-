@@ -4,7 +4,7 @@
 **Organiser submission window:** 15 September 2026, 12:00 PM – 11:45 PM
 ⚠️ **Confirm timezone with the organiser before final submission.**
 
-**Last updated:** Plan 16 (2026-09-13)
+**Last updated:** Plan 17 — Demo Runbook Validation (2026-09-14)
 
 ---
 
@@ -45,10 +45,11 @@
 | `POST /api/v1/copilot/ask` returns plain-language explanation | ✅ Complete | Plan 12 — rules_fallback always; IBM Bob LLM when configured |
 | `POST /api/v1/operations-plan` runs CP-SAT optimizer and returns assignment plan | ✅ Complete | Plan 13 — approval_required=true; metrics, explanation, assumptions |
 | `POST /api/v1/operations-plan/{plan_id}/approve` records human approval | ✅ Complete | Plan 13 — ephemeral, UUID-validated, no DB writes |
-| Backend tests pass (`pytest backend/tests ml/tests optimizer/tests -q` from `src/`) | ✅ Complete | **157 passed, 1 skipped** |
-| Frontend production build passes (`npm run build` in `src/frontend/`) | ✅ Complete | Vite 6, 0 errors, Recharts included |
-| Frontend tests pass (`npm test` in `src/frontend/`) | ✅ Complete | **47 passed** — Vitest + testing-library (23 dashboard + 24 map/alerts) |
+| Backend tests pass (`pytest backend/tests ml/tests optimizer/tests -q` from `src/`) | ✅ Complete | **157 passed, 1 skipped** (env: `DATABASE_URL=sqlite:///./portflow_test.db`) |
+| Frontend production build passes (`npm run build` in `src/frontend/`) | ✅ Complete | Vite 6, 0 errors, built in ~3.8s |
+| Frontend tests pass (`npm test` in `src/frontend/`) | ✅ Complete | **59 passed** — Vitest (23 dashboard + 24 map/alerts + 5 feature pages + 7 judge audit) |
 | `npm audit` — 0 high-severity vulnerabilities | ✅ Complete | 0 vulnerabilities |
+| Complete Functional QA Audit (`docs/QA_AUDIT.md`) | ✅ Complete | Plan 18 — 59-item audit matrix, all journeys PASS, judge click order |
 
 ---
 
@@ -103,6 +104,9 @@
 | `src/backend/tests/test_demo_e2e.py` — 32 E2E integration tests | ✅ Complete | Plan 16 — full demo journey, all API paths, error paths |
 | `vessel_id` field in `VesselWaitingPrediction` + routing fix | ✅ Complete | Plan 16 — bug fix; alternate-routing card now uses correct UUID |
 | Demo Runbook in `src/README.md` | ✅ Complete | Plan 16 — 8-step runbook, directory structure, known limitations |
+| `src/pytest.ini` — `DATABASE_URL=sqlite:///./portflow_test.db` env for tests | ✅ Complete | Plan 17 — demo-blocking fix: engine import failed without live PostgreSQL |
+| `src/frontend/package.json` — `@testing-library/dom` in devDependencies | ✅ Complete | Plan 17 — demo-blocking fix: frontend tests crashed with `Cannot find package` error |
+| Full Judge QA Audit Suite (`src/frontend/src/tests/JudgeAudit.test.tsx`) | ✅ Complete | Plan 18 — 7 comprehensive journey tests |
 | Backend test suite coverage ≥ 70% | 🔲 Not started | Future |
 
 ---
