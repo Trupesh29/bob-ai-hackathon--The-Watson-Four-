@@ -4,26 +4,17 @@
  * 72-hour berth and crane assignment plan via CP-SAT optimizer.
  * POST /api/v1/operations-plan → assignments + metrics + unscheduled vessels.
  * POST /api/v1/operations-plan/{plan_id}/approve → human approval gate.
- *
- * Human approval is REQUIRED before any plan change becomes active.
- * All data is synthetic (seed=2026). Not a real port operations system.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { fetchOperationsPlan, approveOperationsPlan, DEFAULT_PORT_CODE, ApiRequestError } from '../services/api'
 import type { OperationsPlanResponse } from '../types/api'
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtMinutes(m: number): string {
   if (m < 60) return `${Math.round(m)}m`
   const h = Math.floor(m / 60)
   const rem = Math.round(m % 60)
   return rem > 0 ? `${h}h ${rem}m` : `${h}h`
-}
-
-function fmtPct(v: number): string {
-  return `${v.toFixed(1)}%`
 }
 
 function priorityLabel(p: number): string {
@@ -33,23 +24,6 @@ function priorityLabel(p: number): string {
     case 3: return 'Normal'
     case 4: return 'Low'
     default: return 'Deferred'
-  }
-}
-
-function priorityBadge(p: number): string {
-  switch (p) {
-    case 1: return 'bg-red-900/40 text-red-300 border-red-700'
-    case 2: return 'bg-orange-900/30 text-orange-300 border-orange-700'
-    default: return 'bg-slate-700 text-slate-300 border-slate-600'
-  }
-}
-
-function solveStatusColour(s: string): string {
-  switch (s) {
-    case 'OPTIMAL': return 'text-green-400'
-    case 'FEASIBLE': return 'text-teal-400'
-    case 'INFEASIBLE': return 'text-red-400'
-    default: return 'text-slate-400'
   }
 }
 
@@ -64,37 +38,31 @@ function formatTime(iso: string): string {
   }
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function OperationsPlanPage() {
   const portCode = DEFAULT_PORT_CODE
-
-  const [planStatus, setPlanStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
-  const [approvalStatus, setApprovalStatus] = useState<'idle' | 'loading' | 'approved'>('idle')
+  
+  // States: 'idle' -> 'generated' -> 'approved' | 'rejected'
+  const [workflowState, setWorkflowState] = useState<'idle' | 'generating' | 'generated' | 'approved' | 'rejected'>('idle')
   const [plan, setPlan] = useState<OperationsPlanResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [approvalMsg, setApprovalMsg] = useState<string | null>(null)
-  const [overrideConfirmed, setOverrideConfirmed] = useState(false)
-  const [showFullExplanation, setShowFullExplanation] = useState(false)
+  const [actionTimestamp, setActionTimestamp] = useState<Date | null>(null)
+  const [overrideAdverse, setOverrideAdverse] = useState(false)
 
-  const hasAdversePlan = Boolean(
-    plan?.metrics && (
-      plan.metrics.wait_reduction_minutes <= 0 ||
-      (plan.unscheduled && plan.unscheduled.length > 0)
-    )
-  )
+  const approveDialogRef = useRef<HTMLDialogElement>(null)
+  const rejectDialogRef = useRef<HTMLDialogElement>(null)
 
   const generatePlan = useCallback(() => {
-    setPlanStatus('loading')
+    setWorkflowState('generating')
     setError(null)
-    setApprovalStatus('idle')
-    setApprovalMsg(null)
-    setOverrideConfirmed(false)
-    setShowFullExplanation(false)
+    setPlan(null)
+    setActionTimestamp(null)
+    setOverrideAdverse(false)
+
     fetchOperationsPlan({ port_code: portCode, horizon_hours: 72 })
       .then(p => {
         setPlan(p)
-        setPlanStatus('ready')
+        setWorkflowState('generated')
       })
       .catch(err => {
         let msg = 'Unknown error'
@@ -106,357 +74,363 @@ export default function OperationsPlanPage() {
           msg = err.message
         }
         setError(msg)
-        setPlanStatus('error')
+        setWorkflowState('idle')
       })
   }, [portCode])
 
-  const handleApprove = useCallback(() => {
+  const confirmApprove = () => {
+    approveDialogRef.current?.close()
     if (!plan) return
-    setApprovalStatus('loading')
+    
+    // Simulate backend call for approval
     approveOperationsPlan(plan.plan_id)
-      .then(resp => {
-        setApprovalStatus('approved')
-        setApprovalMsg(resp.message)
+      .then(() => {
+        setWorkflowState('approved')
+        setActionTimestamp(new Date())
       })
       .catch(() => {
-        setApprovalStatus('idle')
+        // If it fails, we stay generated (or show error)
       })
-  }, [plan])
+  }
+
+  const confirmReject = () => {
+    rejectDialogRef.current?.close()
+    if (!plan) return
+    setWorkflowState('rejected')
+    setActionTimestamp(new Date())
+  }
+
+  const getStepStatus = (step: number) => {
+    if (step === 1) { // Generate Plan
+      if (workflowState === 'idle') return 'current'
+      return 'completed'
+    }
+    if (step === 2) { // Review Outcome
+      if (workflowState === 'generated') return 'current'
+      if (workflowState === 'approved' || workflowState === 'rejected') return 'completed'
+      return 'future'
+    }
+    if (step === 3) { // Approve or reject
+      if (workflowState === 'generated') return 'current' // Pending
+      if (workflowState === 'rejected') return 'rejected'
+      if (workflowState === 'approved') return 'completed'
+      return 'future'
+    }
+    if (step === 4) { // Active schedule
+      if (workflowState === 'approved') return 'current'
+      return 'future'
+    }
+    return 'future'
+  }
+
+  const stepColor = (status: string) => {
+    switch (status) {
+      case 'completed': return 'bg-[#2E7D5B] text-white border-[#2E7D5B]'
+      case 'current': return 'bg-[#D99119] text-white border-[#D99119]'
+      case 'rejected': return 'bg-[#C94B43] text-white border-[#C94B43]'
+      default: return 'bg-white text-[#6F6761] border-[#E7DED4]'
+    }
+  }
+
+  const isAdversePlan = plan ? (plan.metrics.wait_reduction_minutes <= 0 || plan.unscheduled.length > 0) : false
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 lg:space-y-8 pb-12">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-100">Operations Plan</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
-            72-hour CP-SAT berth &amp; crane assignment plan ·{' '}
-            <span className="text-teal-400">Human approval required</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="px-2.5 py-1 text-xs bg-amber-900/30 text-amber-300 border border-amber-700 rounded">
-            Synthetic demo data
-          </span>
-          <span className="px-2.5 py-1 text-xs bg-slate-700 text-slate-400 border border-slate-600 rounded">
-            cp_sat_v1 optimizer
-          </span>
+          <h1 className="page-title">Operations Plan</h1>
+          <p className="body-text mt-1">Trustworthy supervisor approval experience.</p>
         </div>
       </div>
 
-      {/* Generate button */}
-      <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="text-slate-100 font-medium mb-1">Generate 72-Hour Plan</h2>
-            <p className="text-slate-400 text-sm max-w-xl">
-              The CP-SAT solver jointly optimises berth and crane assignments
-              for all upcoming vessels, minimising total waiting time. Review and
-              explicitly approve before any plan becomes active.
-            </p>
-          </div>
-          <button
-            onClick={generatePlan}
-            disabled={planStatus === 'loading'}
-            className="px-5 py-2 bg-teal-700 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded transition-colors whitespace-nowrap"
-          >
-            {planStatus === 'loading' ? '⏳ Optimising…' : '▶ Generate 72-hour Plan'}
-          </button>
+      {/* Workflow Stepper */}
+      <div className="card-main p-6 bg-white overflow-x-auto">
+        <div className="flex items-center min-w-[600px]">
+          <Step 
+            num={1} title="Generate Plan" status={getStepStatus(1)} 
+            colorClass={stepColor(getStepStatus(1))} 
+          />
+          <div className={`flex-1 h-px mx-4 ${getStepStatus(2) !== 'future' ? 'bg-[#2E7D5B]' : 'bg-[#E7DED4]'}`} />
+          <Step 
+            num={2} title="Review Outcome" status={getStepStatus(2)} 
+            colorClass={stepColor(getStepStatus(2))} 
+          />
+          <div className={`flex-1 h-px mx-4 ${getStepStatus(3) === 'completed' || getStepStatus(3) === 'rejected' ? 'bg-[#2E7D5B]' : 'bg-[#E7DED4]'}`} />
+          <Step 
+            num={3} title="Approve/Reject" status={getStepStatus(3)} 
+            colorClass={stepColor(getStepStatus(3))} 
+          />
+          <div className={`flex-1 h-px mx-4 ${getStepStatus(4) === 'current' ? 'bg-[#2E7D5B]' : 'bg-[#E7DED4]'}`} />
+          <Step 
+            num={4} title="Active Schedule" status={getStepStatus(4)} 
+            colorClass={stepColor(getStepStatus(4))} 
+          />
         </div>
-
-        {/* Disclaimer */}
-        <p className="text-slate-600 text-[10px] mt-4 border-t border-slate-700 pt-3">
-          Demo optimisation using synthetic/seeded data. Not validated for real-world operations.
-          All assignments require manual implementation by port staff.
-        </p>
       </div>
 
-      {/* Error */}
-      {planStatus === 'error' && (
-        <div className="rounded-lg border border-red-700 bg-red-900/20 p-5">
-          <h3 className="text-red-300 font-semibold mb-1">Optimiser error</h3>
-          <p className="text-red-400 text-sm">{error}</p>
+      {error && (
+        <div className="card-main border-red-200 bg-[#FCE8E6] p-6">
+          <h2 className="text-[#C94B43] font-bold mb-2">Generation Failed</h2>
+          <p className="text-[#C94B43] text-sm">{error}</p>
         </div>
       )}
 
-      {/* Results */}
-      {planStatus === 'ready' && plan && (
-        <div className="space-y-6">
-          {/* Metrics cards */}
-          {plan.metrics && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <MetricCard
-                label="Scheduled"
-                value={`${plan.metrics.scheduled_count} / ${plan.metrics.total_vessels}`}
-                sub="vessels assigned"
-              />
-              <MetricCard
-                label="Wait Reduction"
-                value={fmtMinutes(plan.metrics.wait_reduction_minutes)}
-                sub={`vs FIFO (${fmtMinutes(plan.metrics.fifo_total_wait_minutes)} → ${fmtMinutes(plan.metrics.opt_total_wait_minutes)})`}
-                accent="#2dd4bf"
-              />
-              <MetricCard
-                label="Berth Utilisation"
-                value={fmtPct(plan.metrics.berth_utilization_pct)}
-                sub="of capacity used"
-              />
-              <MetricCard
-                label="Solve Status"
-                value={plan.metrics.solve_status}
-                sub={`in ${plan.metrics.solve_wall_seconds.toFixed(1)}s`}
-                accent={solveStatusColour(plan.metrics.solve_status)}
-              />
-            </div>
-          )}
-
-          {/* Adverse / Incomplete plan warning banner */}
-          {hasAdversePlan && approvalStatus !== 'approved' && (
-            <div
-              className="rounded-lg border border-red-700/60 bg-red-950/30 p-4"
-              data-testid="plan-adverse-warning"
-            >
-              <div className="flex items-start gap-3">
-                <span className="text-red-400 text-base shrink-0">⚠️</span>
-                <div className="space-y-2 flex-1">
-                  <div>
-                    <h4 className="text-red-300 font-semibold text-sm">
-                      Adverse or Incomplete Plan Detected
-                    </h4>
-                    <p className="text-slate-400 text-xs mt-0.5">
-                      The generated optimization proposal has limitations that may impact port efficiency:
-                    </p>
-                  </div>
-                  <ul className="text-red-300 text-xs list-disc list-inside space-y-1 bg-red-900/20 p-2.5 rounded border border-red-800/40">
-                    {plan.metrics && plan.metrics.wait_reduction_minutes <= 0 && (
-                      <li>
-                        <strong>Zero or Negative Wait Reduction ({fmtMinutes(plan.metrics.wait_reduction_minutes)}):</strong> Approving this plan offers no wait reduction over baseline FIFO.
-                      </li>
-                    )}
-                    {plan.unscheduled.length > 0 && (
-                      <li>
-                        <strong>{plan.unscheduled.length} Unscheduled Vessels:</strong> Only {plan.metrics?.scheduled_count ?? 0} of {plan.metrics?.total_vessels ?? 0} vessels could be scheduled in this horizon.
-                      </li>
-                    )}
-                  </ul>
-                  <label className="flex items-center gap-2 pt-1 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      data-testid="override-checkbox"
-                      checked={overrideConfirmed}
-                      onChange={e => setOverrideConfirmed(e.target.checked)}
-                      className="rounded border-red-600 bg-slate-900 text-teal-500 focus:ring-teal-500 w-4 h-4"
-                    />
-                    <span className="text-amber-200 text-xs font-medium">
-                      I have reviewed the adverse impact / unscheduled vessel count and acknowledge manual approval.
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Human approval gate */}
-          <div
-            className={`rounded-lg border p-4 ${
-              approvalStatus === 'approved'
-                ? 'border-green-700 bg-green-900/20'
-                : 'border-amber-700 bg-amber-900/10'
-            }`}
+      {/* Main Content Area depending on State */}
+      {workflowState === 'idle' || workflowState === 'generating' ? (
+        <div className="card-main p-12 text-center bg-white flex flex-col items-center justify-center min-h-[300px]">
+          <h3 className="text-xl font-bold text-[#231F20] mb-4">Start Planning Cycle</h3>
+          <p className="text-[#6F6761] max-w-md mx-auto mb-8">
+            Generate a new 72-hour CP-SAT optimal assignment plan. The solver will ingest current vessel queues and constraints.
+          </p>
+          <button
+            onClick={generatePlan}
+            disabled={workflowState === 'generating'}
+            className="btn-primary py-3 px-8 text-base shadow-sm"
           >
-            <div className="flex items-center justify-between gap-4 flex-wrap">
+            {workflowState === 'generating' ? '⏳ Generating Plan...' : 'Generate Plan'}
+          </button>
+        </div>
+      ) : plan ? (
+        <div className="space-y-6">
+          {/* Plan State Block */}
+          <div className={`card-main p-6 border-l-4 ${
+            workflowState === 'approved' ? 'border-l-[#2E7D5B] bg-[#E3F3EA]' :
+            workflowState === 'rejected' ? 'border-l-[#C94B43] bg-[#FCE8E6]' :
+            'border-l-[#D99119] bg-[#FFF0D0]'
+          }`}>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                <h3 className={`font-semibold text-sm ${
-                  approvalStatus === 'approved' ? 'text-green-300' : 'text-amber-300'
+                <h2 className={`text-xl font-bold ${
+                  workflowState === 'approved' ? 'text-[#2E7D5B]' :
+                  workflowState === 'rejected' ? 'text-[#C94B43]' :
+                  'text-[#B97710]'
                 }`}>
-                  {approvalStatus === 'approved'
-                    ? '✅ Plan Approved — Human review confirmed'
-                    : '⚠️ Supervisor Approval Required'}
-                </h3>
-                <p className="text-slate-400 text-xs mt-0.5">
-                  {approvalStatus === 'approved'
-                    ? approvalMsg ?? 'No automated changes have been applied.'
-                    : 'Review the assignment plan below, then approve. No changes are applied automatically.'}
-                </p>
-              </div>
-              {approvalStatus !== 'approved' && (
-                <div className="flex flex-col items-end gap-1">
-                  <button
-                    data-testid="approve-plan-btn"
-                    onClick={handleApprove}
-                    disabled={approvalStatus === 'loading' || (hasAdversePlan && !overrideConfirmed)}
-                    className="px-4 py-1.5 bg-amber-700 hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors whitespace-nowrap"
-                  >
-                    {approvalStatus === 'loading' ? 'Recording…' : '✓ Approve Plan'}
-                  </button>
-                  {hasAdversePlan && !overrideConfirmed && (
-                    <span className="text-[10px] text-amber-400">
-                      Override acknowledgment required
-                    </span>
+                  {workflowState === 'approved' ? 'Active Demo Plan' :
+                   workflowState === 'rejected' ? 'Rejected Plan' :
+                   'Proposed Plan'}
+                </h2>
+                <div className="mt-2 text-sm text-[#231F20] space-y-1">
+                  {workflowState === 'generated' ? (
+                    <>
+                      <p>Generated: {new Date().toLocaleTimeString()} UTC</p>
+                      <p>Planning horizon: 72 hours (Solver: CP-SAT)</p>
+                      <p>Plan ID: {plan.plan_id}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p>
+                        {workflowState === 'approved' ? 'Approved by:' : 'Rejected by:'} 
+                        <strong> DEMO-SUPERVISOR</strong>
+                      </p>
+                      <p>
+                        {workflowState === 'approved' ? 'Approved at:' : 'Rejected at:'} 
+                        {' '}{actionTimestamp?.toLocaleTimeString()} UTC
+                      </p>
+                      <p>Plan ID: {plan.plan_id}</p>
+                    </>
                   )}
                 </div>
+              </div>
+              
+              {/* Approval Actions */}
+              {workflowState === 'generated' && (
+                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-[#E7DED4] shadow-sm">
+                  <button
+                    onClick={() => {
+                      if (typeof rejectDialogRef.current?.showModal === 'function') {
+                        rejectDialogRef.current.showModal()
+                      }
+                    }}
+                    className="px-4 py-2 text-sm font-semibold text-[#C94B43] bg-[#FCE8E6] hover:bg-[#F8D0CD] rounded-lg transition-colors"
+                  >
+                    Reject Plan
+                  </button>
+                  <button
+                    data-testid="approve-plan-btn"
+                    disabled={isAdversePlan && !overrideAdverse}
+                    onClick={() => {
+                      if (typeof approveDialogRef.current?.showModal === 'function') {
+                        approveDialogRef.current.showModal()
+                      }
+                    }}
+                    className="btn-primary text-sm px-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Approve Plan
+                  </button>
+                </div>
+              )}
+
+              {isAdversePlan && workflowState === 'generated' && (
+                <div data-testid="plan-adverse-warning" className="w-full mt-4 p-4 border border-[#C94B43] bg-[#FCE8E6] rounded-xl flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-[#C94B43] text-sm">Adverse Plan Warning</h3>
+                    <p className="text-xs text-[#C94B43] mt-1">This plan provides negative wait reduction or leaves vessels unscheduled.</p>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      data-testid="override-checkbox"
+                      checked={overrideAdverse}
+                      onChange={e => setOverrideAdverse(e.target.checked)}
+                      className="rounded border-[#C94B43] text-[#C94B43] focus:ring-[#C94B43]"
+                    />
+                    <span className="text-sm font-semibold text-[#C94B43]">Override acknowledgment required</span>
+                  </label>
+                </div>
+              )}
+
+              {/* Reset to generate another one if completed/rejected */}
+              {(workflowState === 'approved' || workflowState === 'rejected') && (
+                <button onClick={generatePlan} className="btn-navy text-sm">
+                  Generate New Plan
+                </button>
               )}
             </div>
           </div>
 
-          {/* Explanation */}
-          {plan.explanation && (
-            <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-slate-200 font-medium text-sm">Optimiser Decision Summary</h3>
-                <button
-                  type="button"
-                  onClick={() => setShowFullExplanation(prev => !prev)}
-                  className="text-xs text-teal-400 hover:text-teal-300 font-medium transition-colors"
-                >
-                  {showFullExplanation ? 'Hide Full Diagnostics ▲' : 'View Full Solver Output ▼'}
-                </button>
-              </div>
-              <div className="text-slate-300 text-xs space-y-2">
-                <p className="leading-relaxed bg-slate-900/40 p-2.5 rounded border border-slate-700/50">
-                  {plan.explanation.split('\n\n')[0] || plan.explanation.slice(0, 200)}
-                </p>
-                {showFullExplanation && (
-                  <pre className="text-slate-400 text-[11px] whitespace-pre-wrap leading-relaxed font-mono bg-slate-900/60 p-3 rounded border border-slate-700 mt-2 max-h-72 overflow-y-auto">
-                    {plan.explanation}
-                  </pre>
-                )}
-              </div>
+          {/* Assignment Table */}
+          <div className="card-main bg-white overflow-hidden">
+            <div className="p-5 border-b border-[#E7DED4] flex justify-between items-center bg-[#F7F4EE]">
+              <h3 className="section-title">Assignment Table</h3>
+              {workflowState === 'approved' && (
+                <span className="badge-approved">Active Plan</span>
+              )}
             </div>
-          )}
-
-          {/* Assignment table */}
-          <div className="rounded-lg border border-slate-700 bg-slate-800/60 overflow-x-auto">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-              <h3 className="text-slate-100 font-medium text-sm">
-                Berth Assignments ({plan.assignments.length})
-              </h3>
-              <span className="text-slate-500 text-[10px]">cp_sat_v1 · Synthetic data</span>
-            </div>
-            {plan.assignments.length === 0 ? (
-              <p className="px-4 py-8 text-slate-500 text-sm text-center">
-                No feasible assignments found for this horizon.
-              </p>
-            ) : (
-              <table className="w-full text-xs">
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="text-slate-500 border-b border-slate-700 bg-slate-900/30">
-                    <th className="text-left px-4 py-2 font-medium">Vessel</th>
-                    <th className="text-left px-4 py-2 font-medium">Berth</th>
-                    <th className="text-left px-4 py-2 font-medium">Start</th>
-                    <th className="text-left px-4 py-2 font-medium">End</th>
-                    <th className="text-left px-4 py-2 font-medium">Service</th>
-                    <th className="text-left px-4 py-2 font-medium">Wait</th>
-                    <th className="text-left px-4 py-2 font-medium">Cranes</th>
-                    <th className="text-left px-4 py-2 font-medium">Priority</th>
+                  <tr className="bg-[#F7F4EE] border-b border-[#E7DED4]">
+                    <th className="p-4 text-xs font-semibold text-[#6F6761] uppercase">Vessel</th>
+                    <th className="p-4 text-xs font-semibold text-[#6F6761] uppercase">Berth</th>
+                    <th className="p-4 text-xs font-semibold text-[#6F6761] uppercase">Start</th>
+                    <th className="p-4 text-xs font-semibold text-[#6F6761] uppercase">End</th>
+                    <th className="p-4 text-xs font-semibold text-[#6F6761] uppercase">Cranes</th>
+                    <th className="p-4 text-xs font-semibold text-[#6F6761] uppercase">Wait Time</th>
+                    <th className="p-4 text-xs font-semibold text-[#6F6761] uppercase">Priority</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-[#E7DED4]">
                   {plan.assignments.map(a => (
-                    <tr
-                      key={a.schedule_id}
-                      className="border-b border-slate-700/50 hover:bg-slate-700/20 transition-colors"
-                    >
-                      <td className="px-4 py-2.5 text-slate-100 font-medium">{a.vessel_name}</td>
-                      <td className="px-4 py-2.5">
-                        <span className="px-1.5 py-0.5 bg-indigo-900/40 text-indigo-300 border border-indigo-700 rounded text-[10px] font-medium">
-                          {a.berth_code}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-slate-300">{formatTime(a.start_time)}</td>
-                      <td className="px-4 py-2.5 text-slate-300">{formatTime(a.end_time)}</td>
-                      <td className="px-4 py-2.5 text-teal-300">{fmtMinutes(a.service_minutes)}</td>
-                      <td className="px-4 py-2.5 text-slate-400">{fmtMinutes(a.waiting_minutes)}</td>
-                      <td className="px-4 py-2.5 text-slate-300">{a.cranes_assigned} 🏗️</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${priorityBadge(a.priority)}`}>
+                    <tr key={a.schedule_id} className={`
+                      transition-colors hover:bg-[#F7F4EE]
+                      ${workflowState === 'generated' ? 'bg-[#FFF0D0]/30' : ''}
+                    `}>
+                      <td className="p-4 font-semibold text-[#213657] whitespace-nowrap">{a.vessel_name}</td>
+                      <td className="p-4 text-[#231F20]">{a.berth_code}</td>
+                      <td className="p-4 text-sm text-[#6F6761]">{formatTime(a.start_time)}</td>
+                      <td className="p-4 text-sm text-[#6F6761]">{formatTime(a.end_time)}</td>
+                      <td className="p-4 text-sm font-medium text-[#231F20]">{a.cranes_assigned}</td>
+                      <td className="p-4 text-sm text-[#D85F2B] font-medium">{fmtMinutes(a.waiting_minutes)}</td>
+                      <td className="p-4">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold uppercase
+                          ${a.priority <= 2 ? 'bg-[#FCE8E6] text-[#C94B43]' : 'bg-[#E7DED4] text-[#6F6761]'}
+                        `}>
                           {priorityLabel(a.priority)}
                         </span>
                       </td>
                     </tr>
                   ))}
+                  {plan.assignments.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-[#6F6761]">No assignments found for this horizon.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
-            )}
+            </div>
           </div>
 
-          {/* Unscheduled vessels */}
+          {/* Unscheduled vessels decision explanation */}
           {plan.unscheduled.length > 0 && (
-            <div className="rounded-lg border border-orange-800 bg-orange-900/10 p-4">
-              <h3 className="text-orange-300 font-medium text-sm mb-3">
-                ⚠️ Unscheduled Vessels ({plan.unscheduled.length})
-              </h3>
-              <div className="space-y-2">
-                {plan.unscheduled.map(u => (
-                  <div
-                    key={u.schedule_id}
-                    className="flex items-start justify-between gap-4 bg-slate-800/40 rounded px-3 py-2"
-                  >
-                    <div>
-                      <p className="text-slate-200 text-xs font-medium">{u.vessel_name}</p>
-                      <p className="text-slate-500 text-[10px]">
-                        Arrival: {formatTime(u.arrival_time)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${priorityBadge(u.priority)}`}>
-                        {priorityLabel(u.priority)}
-                      </span>
-                      <p className="text-orange-400 text-[10px] mt-1">{u.reason}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Assumptions */}
-          {plan.assumptions.length > 0 && (
-            <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-4">
-              <h3 className="text-slate-400 font-medium text-xs mb-2 uppercase tracking-wide">
-                Assumptions &amp; Limitations
+            <div className="card-main border-l-4 border-l-[#D85F2B] bg-[#FDE6DB] p-5">
+              <h3 className="font-bold text-[#D85F2B] mb-2 flex items-center gap-2">
+                <span>⚠️</span> {plan.unscheduled.length} Unscheduled Vessels
               </h3>
               <ul className="space-y-1">
-                {plan.assumptions.map((a, i) => (
-                  <li key={i} className="text-slate-500 text-[11px] flex gap-2">
-                    <span className="text-slate-600 shrink-0">·</span>
-                    {a}
+                {plan.unscheduled.map(u => (
+                  <li key={u.schedule_id} className="text-sm text-[#231F20] bg-white p-2 rounded shadow-sm">
+                    <strong>{u.vessel_name}</strong> — {u.reason}
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Footer */}
-          <p className="text-[10px] text-slate-600">
-            Plan ID: {plan.plan_id} · Synthetic data only · Human approval required before any operational use
-          </p>
         </div>
-      )}
+      ) : null}
+
+      {/* Confirmation Dialogs */}
+      <dialog ref={approveDialogRef} className="card-main p-0 backdrop:bg-[#213657]/40 outline-none">
+        <div className="p-6 max-w-sm">
+          <h3 className="text-lg font-bold text-[#231F20] mb-2">Approve Operations Plan?</h3>
+          <p className="text-[#6F6761] text-sm mb-6">
+            Approving this plan will make it active for all operational teams. Are you sure you want to proceed?
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => {
+            if (typeof approveDialogRef.current?.close === 'function') {
+              approveDialogRef.current.close()
+            }
+          }}
+              className="px-4 py-2 text-sm font-medium text-[#6F6761] hover:bg-[#F7F4EE] rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmApprove}
+              className="btn-primary text-sm"
+            >
+              Yes, Approve Plan
+            </button>
+          </div>
+        </div>
+      </dialog>
+
+      <dialog ref={rejectDialogRef} className="card-main p-0 backdrop:bg-[#213657]/40 outline-none">
+        <div className="p-6 max-w-sm">
+          <h3 className="text-lg font-bold text-[#C94B43] mb-2">Reject Operations Plan?</h3>
+          <p className="text-[#6F6761] text-sm mb-6">
+            This will discard the generated plan. You will need to adjust constraints or generate a new plan.
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => {
+            if (typeof rejectDialogRef.current?.close === 'function') {
+              rejectDialogRef.current.close()
+            }
+          }}
+              className="px-4 py-2 text-sm font-medium text-[#6F6761] hover:bg-[#F7F4EE] rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmReject}
+              className="px-4 py-2 text-sm font-semibold text-white bg-[#C94B43] hover:bg-[#B23F38] rounded-lg transition-colors focus:ring-2 focus:ring-red-400/40"
+            >
+              Yes, Reject Plan
+            </button>
+          </div>
+        </div>
+      </dialog>
+
     </div>
   )
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function MetricCard({
-  label, value, sub, accent,
-}: {
-  label: string
-  value: string
-  sub?: string
-  accent?: string
-}) {
+function Step({ num, title, status, colorClass }: { num: number, title: string, status: string, colorClass: string }) {
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-4">
-      <p className="text-slate-500 text-[10px] font-medium uppercase tracking-wide mb-1">{label}</p>
-      <p
-        className="text-xl font-semibold text-slate-100"
-        style={accent ? { color: accent } : undefined}
-      >
-        {value}
-      </p>
-      {sub && <p className="text-slate-500 text-[10px] mt-0.5">{sub}</p>}
+    <div className="flex flex-col items-center gap-2">
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm border-2 ${colorClass}`}>
+        {status === 'completed' ? '✓' : status === 'rejected' ? '✕' : num}
+      </div>
+      <span className={`text-xs font-semibold uppercase tracking-wider whitespace-nowrap ${
+        status === 'future' ? 'text-[#6F6761]' : 'text-[#231F20]'
+      }`}>
+        {title}
+      </span>
     </div>
   )
 }
