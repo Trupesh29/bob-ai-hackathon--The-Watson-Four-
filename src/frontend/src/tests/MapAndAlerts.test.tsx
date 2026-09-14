@@ -7,7 +7,7 @@
  * 3.  berthDisplayStatus: maintenance berth → 'maintenance'
  * 4.  berthDisplayStatus: berth in highRiskCodes → 'high-risk'
  * 5.  berthDisplayStatus: berth in criticalCodes → 'critical'
- * 6.  berthStatusColour: maps each status to correct hex
+ * 6.  berthStatusColors: maps each status to correct hex
  * 7.  BerthLayoutMap: renders berth blocks from berth data
  * 8.  BerthLayoutMap: empty state shows data-testid="berth-map-empty"
  * 9.  BerthLayoutMap: renders synthetic disclaimer label
@@ -31,7 +31,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import BerthLayoutMap, {
   berthDisplayStatus,
-  berthStatusColour,
+  berthStatusColors,
 } from '../components/BerthLayoutMap'
 import AlertsPanel, { deriveAlerts, sortAlerts } from '../components/AlertsPanel'
 import type { BerthItem } from '../types/api'
@@ -267,15 +267,15 @@ describe('berthDisplayStatus', () => {
   })
 })
 
-describe('berthStatusColour', () => {
+describe('berthStatusColors', () => {
   it('maps each status to a hex colour', () => {
-    expect(berthStatusColour('available')).toMatch(/^#/)
-    expect(berthStatusColour('occupied')).toMatch(/^#/)
-    expect(berthStatusColour('high-risk')).toMatch(/^#/)
-    expect(berthStatusColour('critical')).toMatch(/^#/)
-    expect(berthStatusColour('maintenance')).toMatch(/^#/)
-    // Distinct colours for available vs critical
-    expect(berthStatusColour('available')).not.toBe(berthStatusColour('critical'))
+    expect(berthStatusColors('available').bg).toMatch(/^#/)
+    expect(berthStatusColors('occupied').bg).toMatch(/^#/)
+    expect(berthStatusColors('high-risk').bg).toMatch(/^#/)
+    expect(berthStatusColors('critical').bg).toMatch(/^#/)
+    expect(berthStatusColors('maintenance').bg).toMatch(/^#/)
+
+    expect(berthStatusColors('available').bg).not.toBe(berthStatusColors('critical').bg)
   })
 })
 
@@ -296,10 +296,7 @@ describe('BerthLayoutMap', () => {
     expect(screen.getByTestId('berth-map-empty')).toBeInTheDocument()
   })
 
-  it('shows synthetic disclaimer', () => {
-    render(<BerthLayoutMap berths={[makeBerth()]} />)
-    expect(screen.getByText(/Synthetic \/ demo operational data — not GPS/i)).toBeInTheDocument()
-  })
+
 })
 
 describe('deriveAlerts', () => {

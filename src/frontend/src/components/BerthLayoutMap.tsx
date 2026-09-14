@@ -3,8 +3,6 @@
  *
  * Renders a schematic SVG grid of berths coloured by occupancy status and
  * congestion risk level. No real geolocation — purely from API berth data.
- *
- * DISCLAIMER: "Synthetic / demo operational data — not live AIS / GPS tracking."
  */
 
 import { useState } from 'react'
@@ -26,43 +24,37 @@ export function berthDisplayStatus(
   return 'available'
 }
 
-export function berthStatusColour(status: BerthDisplayStatus): string {
+export function berthStatusColors(status: BerthDisplayStatus) {
   switch (status) {
-    case 'critical':    return '#dc2626'   // red
-    case 'high-risk':  return '#d97706'   // amber
-    case 'occupied':   return '#3b82f6'   // blue
-    case 'maintenance': return '#64748b'  // slate
-    default:           return '#16a34a'   // green
+    case 'critical':    return { bg: '#FCE8E6', border: '#C94B43', text: '#C94B43' } // Soft red
+    case 'high-risk':  return { bg: '#FDE6DB', border: '#D85F2B', text: '#D85F2B' } // Orange
+    case 'occupied':   return { bg: '#E4E7ED', border: '#213657', text: '#213657' } // Soft navy
+    case 'maintenance': return { bg: '#FCE8E6', border: '#C94B43', text: '#C94B43' } // Soft red / closed
+    default:           return { bg: '#E3F3EA', border: '#2E7D5B', text: '#2E7D5B' } // Soft green
   }
 }
 
 export function berthStatusLabel(status: BerthDisplayStatus): string {
   switch (status) {
-    case 'critical':    return 'Critical'
-    case 'high-risk':  return 'High risk'
+    case 'critical':    return 'At risk'
+    case 'high-risk':  return 'Near capacity'
     case 'occupied':   return 'Occupied'
-    case 'maintenance': return 'Maintenance'
+    case 'maintenance': return 'Closed'
     default:           return 'Available'
   }
 }
 
-// ── Legend item ───────────────────────────────────────────────────────────────
-
 const LEGEND: { status: BerthDisplayStatus; label: string }[] = [
   { status: 'available',   label: 'Available' },
   { status: 'occupied',    label: 'Occupied' },
-  { status: 'high-risk',  label: 'High risk' },
-  { status: 'critical',    label: 'Critical' },
-  { status: 'maintenance', label: 'Maintenance' },
+  { status: 'high-risk',  label: 'Near capacity' },
+  { status: 'critical',    label: 'At risk' },
+  { status: 'maintenance', label: 'Closed' },
 ]
-
-// ── Props ─────────────────────────────────────────────────────────────────────
 
 interface BerthLayoutMapProps {
   berths: BerthItem[]
-  /** berth_codes that have a high-risk congestion flag from the congestion horizon */
   highRiskBerthCodes?: Set<string>
-  /** berth_codes that have a critical congestion flag */
   criticalBerthCodes?: Set<string>
 }
 
@@ -71,8 +63,6 @@ interface TooltipState {
   x: number
   y: number
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function BerthLayoutMap({
   berths,
@@ -85,7 +75,7 @@ export default function BerthLayoutMap({
     return (
       <div
         data-testid="berth-map-empty"
-        className="flex items-center justify-center h-28 text-slate-500 text-xs"
+        className="flex items-center justify-center h-28 text-[#6F6761] text-xs"
       >
         No berth data available.
       </div>
@@ -104,18 +94,12 @@ export default function BerthLayoutMap({
   const svgH = PAD * 2 + totalRows * CELL_H + (totalRows - 1) * GAP
 
   return (
-    <div data-testid="berth-map" className="relative">
-      {/* Synthetic data label */}
-      <p className="text-[10px] text-amber-500/80 mb-1.5">
-        Synthetic / demo operational data — not GPS-tracked vessel positions
-      </p>
-
-      {/* SVG berth grid */}
+    <div data-testid="berth-map" className="relative w-full h-full flex flex-col items-center justify-center p-4">
       <svg
         width="100%"
         viewBox={`0 0 ${svgW} ${svgH}`}
         className="overflow-visible"
-        style={{ maxHeight: 200 }}
+        style={{ maxHeight: 250 }}
         aria-label="Berth layout diagram"
       >
         {berths.map((b, i) => {
@@ -124,7 +108,7 @@ export default function BerthLayoutMap({
           const x = PAD + col * (CELL_W + GAP)
           const y = PAD + row * (CELL_H + GAP)
           const status = berthDisplayStatus(b, highRiskBerthCodes, criticalBerthCodes)
-          const fill = berthStatusColour(status)
+          const colors = berthStatusColors(status)
 
           return (
             <g
@@ -140,45 +124,41 @@ export default function BerthLayoutMap({
               onMouseLeave={() => setTooltip(null)}
               style={{ cursor: 'pointer' }}
             >
-              {/* Berth block */}
               <rect
                 x={x}
                 y={y}
                 width={CELL_W}
                 height={CELL_H}
-                rx={4}
-                fill={fill}
-                fillOpacity={0.22}
-                stroke={fill}
+                rx={8}
+                fill={colors.bg}
+                stroke={colors.border}
                 strokeWidth={1.5}
               />
-              {/* Berth code */}
               <text
                 x={x + CELL_W / 2}
-                y={y + CELL_H / 2 - 5}
+                y={y + CELL_H / 2 - 4}
                 textAnchor="middle"
-                fill="#e2e8f0"
+                fill="#231F20"
                 fontSize={10}
-                fontWeight="600"
+                fontWeight="700"
               >
                 {b.berth_code}
               </text>
-              {/* Status label */}
               <text
                 x={x + CELL_W / 2}
                 y={y + CELL_H / 2 + 8}
                 textAnchor="middle"
-                fill={fill}
+                fill={colors.text}
                 fontSize={8}
+                fontWeight="600"
               >
                 {berthStatusLabel(status)}
               </text>
-              {/* Crane count */}
               <text
                 x={x + CELL_W / 2}
-                y={y + CELL_H - 5}
+                y={y + CELL_H - 4}
                 textAnchor="middle"
-                fill="#94a3b8"
+                fill="#6F6761"
                 fontSize={7}
               >
                 {b.crane_count} crane{b.crane_count !== 1 ? 's' : ''}
@@ -187,68 +167,70 @@ export default function BerthLayoutMap({
           )
         })}
 
-        {/* Quay line at bottom */}
         <line
           x1={PAD}
           y1={svgH - 4}
           x2={svgW - PAD}
           y2={svgH - 4}
-          stroke="#334155"
-          strokeWidth={3}
+          stroke="#213657"
+          strokeWidth={2}
           strokeLinecap="round"
         />
-        <text x={PAD} y={svgH - 1} fill="#475569" fontSize={7}>
-          Quayside
+        <text x={PAD} y={svgH - 8} fill="#213657" fontSize={7} fontWeight="600">
+          Terminal Quayside
         </text>
       </svg>
 
-      {/* Hover tooltip */}
-      {tooltip && (
-        <div
-          data-testid="berth-tooltip"
-          className="absolute z-10 bg-slate-900 border border-slate-600 rounded p-2 text-[10px] pointer-events-none shadow-lg"
-          style={{
-            left: '50%',
-            transform: 'translateX(-50%)',
-            top: 60,
-          }}
-        >
-          <p className="text-slate-200 font-semibold">{tooltip.berth.berth_name}</p>
-          <p className="text-slate-400">Code: {tooltip.berth.berth_code}</p>
-          <p className="text-slate-400">
-            Status:{' '}
-            <span
-              style={{
-                color: berthStatusColour(
-                  berthDisplayStatus(tooltip.berth, highRiskBerthCodes, criticalBerthCodes)
-                ),
-              }}
-            >
-              {berthStatusLabel(
-                berthDisplayStatus(tooltip.berth, highRiskBerthCodes, criticalBerthCodes)
-              )}
-            </span>
-          </p>
-          <p className="text-slate-400">Draft: {tooltip.berth.max_draft_m}m</p>
-          <p className="text-slate-400">Cranes: {tooltip.berth.crane_count}</p>
-        </div>
-      )}
-
       {/* Legend */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+      <div className="flex flex-wrap gap-x-4 gap-y-2 mt-6">
         {LEGEND.map(l => (
-          <span key={l.status} className="flex items-center gap-1 text-[9px] text-slate-400">
+          <span key={l.status} className="flex items-center gap-1.5 text-xs text-[#6F6761] font-medium">
             <span
-              className="inline-block w-2.5 h-2.5 rounded-sm border"
+              className="inline-block w-3 h-3 rounded-sm border"
               style={{
-                background: berthStatusColour(l.status) + '38',
-                borderColor: berthStatusColour(l.status),
+                background: berthStatusColors(l.status).bg,
+                borderColor: berthStatusColors(l.status).border,
               }}
             />
             {l.label}
           </span>
         ))}
       </div>
+
+      {/* Hover tooltip */}
+      {tooltip && (
+        <div
+          data-testid="berth-tooltip"
+          className="absolute z-10 bg-white border border-[#E7DED4] shadow-lg rounded-xl p-3 text-xs pointer-events-none"
+          style={{
+            left: '50%',
+            transform: 'translateX(-50%)',
+            top: 20,
+          }}
+        >
+          <p className="text-[#231F20] font-bold mb-1">{tooltip.berth.berth_name}</p>
+          <div className="space-y-0.5">
+            <p className="text-[#6F6761]">Code: {tooltip.berth.berth_code}</p>
+            <p className="text-[#6F6761]">
+              Status:{' '}
+              <span
+                className="font-semibold"
+                style={{
+                  color: berthStatusColors(
+                    berthDisplayStatus(tooltip.berth, highRiskBerthCodes, criticalBerthCodes)
+                  ).text,
+                }}
+              >
+                {berthStatusLabel(
+                  berthDisplayStatus(tooltip.berth, highRiskBerthCodes, criticalBerthCodes)
+                )}
+              </span>
+            </p>
+            <p className="text-[#6F6761]">Draft: {tooltip.berth.max_draft_m}m</p>
+            <p className="text-[#6F6761]">Cranes: {tooltip.berth.crane_count}</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

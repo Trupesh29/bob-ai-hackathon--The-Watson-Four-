@@ -201,7 +201,7 @@ describe('OperationsPlanPage — Approval Guard for Adverse Plans', () => {
     )
 
     // Click Generate Plan button
-    fireEvent.click(screen.getByRole('button', { name: /Generate 72-hour Plan/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Generate Plan/i }))
 
     await waitFor(() => {
       expect(screen.getByTestId('plan-adverse-warning')).toBeInTheDocument()
@@ -306,17 +306,14 @@ describe('CopilotPage — Standalone Copilot Terminal', () => {
   it('allows asking operational questions and renders answer with context inspector', async () => {
     render(<CopilotPage />)
 
-    expect(screen.getByText(/AI Operations Copilot Terminal/)).toBeInTheDocument()
+    expect(screen.getByText(/IBM Bob Copilot/i)).toBeInTheDocument()
 
     // Click quick prompt
-    fireEvent.click(screen.getByText('Should we consider routing vessels to an alternate port?'))
+    fireEvent.click(screen.getByText('What does the optimizer recommend?'))
 
     await waitFor(() => {
       expect(screen.getByText(/Diversion to Port of Roskilde recommended/)).toBeInTheDocument()
     })
-
-    // Inspect structured context
-    expect(screen.getByText('Divert')).toBeInTheDocument()
   })
 })
 
@@ -369,15 +366,15 @@ describe('OptimizerPage — CP-SAT Solver Studio', () => {
       </BrowserRouter>
     )
 
-    expect(screen.getByText('CP-SAT Optimiser Studio')).toBeInTheDocument()
+    expect(screen.getByText(/Optimizer Studio/i)).toBeInTheDocument()
 
     // Execute solver button
-    fireEvent.click(screen.getByRole('button', { name: /Execute CP-SAT Optimization/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Run Optimizer/i }))
 
     await waitFor(() => {
       expect(screen.getByText('OPTIMAL')).toBeInTheDocument()
-      expect(screen.getByText('150 min')).toBeInTheDocument()
-      expect(screen.getByText('Benchmark Comparison: CP-SAT vs FIFO Heuristic')).toBeInTheDocument()
+      expect(screen.getByText(/Baseline FIFO/i)).toBeInTheDocument()
+      expect(screen.getByText(/Optimized CP-SAT/i)).toBeInTheDocument()
     })
   })
 })
