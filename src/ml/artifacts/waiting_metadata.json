@@ -35,19 +35,19 @@
   "val_rows": 6,
   "test_rows": 8,
   "train_time_range": {
-    "start": "2026-09-15T06:08:46.194883+00:00",
-    "end": "2026-09-24T06:55:09.795189+00:00"
+    "start": "2026-09-15T06:01:44.215386+00:00",
+    "end": "2026-09-24T07:02:59.967006+00:00"
   },
   "test_time_range": {
-    "start": "2026-09-27T06:03:23.784036+00:00",
-    "end": "2026-09-28T05:23:35.569509+00:00"
+    "start": "2026-09-27T05:56:24.606652+00:00",
+    "end": "2026-09-28T05:11:00.821619+00:00"
   },
   "metrics": {
-    "val_mae_hours": 7.9874,
-    "test_mae_hours": 18.1751,
-    "test_rmse_hours": 22.4891,
-    "test_r2": -0.5746,
-    "baseline_median_mae_hours": 27.0417
+    "val_mae_hours": 8.6453,
+    "test_mae_hours": 9.4959,
+    "test_rmse_hours": 11.8475,
+    "test_r2": -0.1865,
+    "baseline_median_mae_hours": 11.4166
   },
   "limitations": [
     "Synthetic data only (~44 rows); metrics are illustrative.",

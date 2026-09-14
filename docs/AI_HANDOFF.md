@@ -1743,3 +1743,101 @@ All checks pass. No code changes were required in this session.
 Do not fabricate these artifacts.
 
 ---
+
+## Session: Plan 17 — Demo Runbook Validation & Bug Fixes (2026-09-14)
+
+**Date:** 2026-09-14
+**Goal:** Execute the full demo scenario (`demo_traffic_spike`) end-to-end,
+confirm all tests pass without a live PostgreSQL server, and fix any
+demo-blocking defects found in the process.
+
+### Defects Found and Fixed
+
+| File | Defect | Fix |
+|---|---|---|
+| `src/pytest.ini` | `dependencies.py` creates a PostgreSQL engine at import time; without `DATABASE_URL` set, every test collection failed with `ModuleNotFoundError: No module named 'psycopg'` | Added `env = DATABASE_URL=sqlite:///./portflow_test.db` via `pytest-env` plugin |
+| `src/frontend/package.json` | `@testing-library/jest-dom` depends on `@testing-library/dom` which was not declared; all 3 frontend test suites crashed with `Cannot find package '@testing-library/dom'` | Added `@testing-library/dom ^10.4.2` to `devDependencies` |
+
+Both fixes are in `src/` (allowed scope). No schema changes. No fabricated data.
+
+### Packages Installed (local dev environment only — not project deps)
+
+- `pytest` 9.1.1
+- `pytest-asyncio` 1.4.0
+- `pytest-env` 1.7.1
+- `httpx` 0.28.1
+- `sqlalchemy` 2.0.52
+- `pydantic-settings` 2.15.0
+- `psycopg[binary]` 3.3.5
+- `psycopg2-binary` 2.9.13
+- `ortools` 9.15.6755
+
+### Validation Results
+
+| Check | Result |
+|---|---|
+| `py -3.14 -m pytest backend/tests/ ml/tests/ optimizer/tests/ -q` (with `DATABASE_URL=sqlite:///./portflow_test.db`) | ✅ **152 passed, 6 skipped** in 38.20s |
+| `npm test -- --run` (from `src/frontend/`) | ✅ **52 passed** (23 DashboardPage + 24 MapAndAlerts + 5 FeaturePages) |
+| `npm run build` (from `src/frontend/`) | ✅ Built in 3.89s, 638 modules, 0 errors |
+| `git diff --check` | ✅ Exit 0 |
+| `.github/workflows/validate.yml` unchanged | ✅ Confirmed |
+
+### Known Limitations (unchanged from Plan 16)
+
+1. **44-row training set** — `waiting_rf_v1` metrics illustrative only.
+2. **Ephemeral plans** — operations plans are not persisted; approve check is UUID-format-only.
+3. **Synthetic base date** — schedules centred on 2026-09-15; `arrivals_next_24h` may be 0 after that date.
+4. **Backend test coverage metric** — not yet measured; ≥70% target remains open.
+
+### IBM Bob Evidence — Human Action Required
+
+1. Export this IBM Bob task history as Markdown.
+2. Capture the IBM Bob task-consumption summary screenshot.
+3. Remove any secrets or personal data from the export.
+4. Save both files under `bob_sessions/` with filenames:
+   - `plan17-session-YYYY-MM-DD.md`
+   - `plan17-session-YYYY-MM-DD-screenshot.png`
+
+Do not fabricate these artifacts.
+
+---
+
+## Session: Plan 18 — Full Functional QA Audit (Judge Perspective) — 2026-09-14
+
+**Date:** 2026-09-14
+**Goal:** Execute complete functional QA audit of the PortFlow AI website as a hackathon judge. Verify local running backend and frontend, test all 9 user journeys, inspect every button and action, train ML pipelines, and produce `docs/QA_AUDIT.md`.
+
+### Completed Work
+
+| File | Action | Notes |
+|---|---|---|
+| `src/ml/artifacts/congestion_pipeline.joblib` | Generated | Trained RandomForest congestion classifier via `ml.congestion_train` with UTF-8 flag |
+| `src/ml/artifacts/waiting_pipeline.joblib` | Generated | Trained RandomForest waiting-time regressor via `ml.waiting_train` |
+| `src/frontend/src/tests/JudgeAudit.test.tsx` | Created | Comprehensive automated frontend test suite covering all 9 journeys (7 tests, all passing) |
+| `docs/QA_AUDIT.md` | Created | 59-item functional QA audit matrix, overall readiness, judge click order, and 8 manual check steps |
+| `docs/AI_HANDOFF.md` | Updated | Recorded Plan 18 audit results |
+| `docs/submission-readiness.md` | Updated | Updated test counts (157 backend passed, 59 frontend passed) and audit status |
+
+### Validation Results
+
+| Check | Result |
+|---|---|
+| `py -3.14 -m pytest backend/tests/ ml/tests/ optimizer/tests/ -q` | ✅ **157 passed, 1 skipped** in 48.2s |
+| `npm test -- --run` (from `src/frontend/`) | ✅ **59 passed** (4 of 4 test files passed) |
+| `npm run build` (from `src/frontend/`) | ✅ Built in 3.78s, 638 modules, 0 errors |
+| `git diff --check` | ✅ Exit 0 |
+| `.github/workflows/validate.yml` unchanged | ✅ Confirmed |
+| Full API audit across all 5 scenarios & modes | ✅ All REST endpoints functional (health, summary, congestion, waiting, routing, copilot, plan, approve) |
+
+### IBM Bob Evidence — Human Action Required
+
+1. Export this IBM Bob task history as Markdown.
+2. Capture the IBM Bob task-consumption summary screenshot.
+3. Remove any secrets or personal data from the export.
+4. Save both files under `bob_sessions/` with filenames:
+   - `plan18-session-YYYY-MM-DD.md`
+   - `plan18-session-YYYY-MM-DD-screenshot.png`
+
+Do not fabricate these artifacts.
+
+---

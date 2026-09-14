@@ -1,15 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Maritime operational colour palette */
+/* PortFlow Design System */
 :root {
-  --navy-900: #0a1628;
-  --navy-800: #0d2040;
-  --teal-500: #0891b2;
-  --teal-400: #22d3ee;
+  /* Color Palette */
+  --portflow-canvas: #F7F4EE;
+  --portflow-surface: #FFFFFF;
+  --portflow-ink: #231F20;
+  --portflow-muted: #6F6761;
+  --portflow-border: #E7DED4;
+
+  --portflow-navy: #213657;
+  --portflow-navy-hover: #2D4A73;
+
+  --portflow-amber: #D99119;
+  --portflow-amber-hover: #B97710;
+  --portflow-amber-soft: #FFF0D0;
+
+  --portflow-orange: #D85F2B;
+  --portflow-orange-soft: #FDE6DB;
+
+  --portflow-purple: #7656B8;
+  --portflow-purple-soft: #F1ECFB;
+
+  --portflow-green: #2E7D5B;
+  --portflow-green-soft: #E3F3EA;
+
+  --portflow-red: #C94B43;
+  --portflow-red-soft: #FCE8E6;
+
+  /* Shadow system */
+  --shadow-card: 0 10px 30px rgba(33, 54, 87, 0.08);
+  --shadow-card-hover: 0 14px 38px rgba(33, 54, 87, 0.14);
+  --shadow-sidebar: 8px 0 30px rgba(20, 30, 50, 0.12);
+
+  /* Border-radius system */
+  --radius-panel: 28px;
+  --radius-card-main: 20px;
+  --radius-card-standard: 16px;
+  --radius-btn: 12px;
+  --radius-tag: 10px;
+
+  /* Legacy palette bridge */
+  --navy-900: #213657;
+  --navy-800: #2D4A73;
+  --teal-500: #D99119;
+  --teal-400: #B97710;
 }
 
 body {
-  @apply bg-slate-950 text-slate-100 antialiased;
+  @apply antialiased;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--portflow-canvas);
+  color: var(--portflow-ink);
+}
+
+/* Ensure no full dark page backgrounds remain */
+html, #root {
+  min-height: 100%;
+  background-color: var(--portflow-canvas);
+  color: var(--portflow-ink);
+}
+
+.min-h-screen.bg-slate-950 {
+  background-color: var(--portflow-canvas) !important;
+  color: var(--portflow-ink) !important;
+}
+
+header.bg-slate-950\/80 {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  border-bottom-color: var(--portflow-border) !important;
+  color: var(--portflow-ink) !important;
+}
+
+header.bg-slate-950\/80 .text-slate-200 {
+  color: var(--portflow-navy) !important;
+}
+
+@layer components {
+  /* Typography */
+  .page-title {
+    @apply text-[28px] sm:text-[32px] font-semibold leading-tight tracking-tight;
+    color: var(--portflow-navy);
+  }
+
+  .section-title {
+    @apply text-[18px] sm:text-[20px] font-semibold leading-snug;
+    color: var(--portflow-ink);
+  }
+
+  .metric-value {
+    @apply text-[28px] sm:text-[36px] font-bold leading-none;
+    color: var(--portflow-ink);
+  }
+
+  .body-text {
+    @apply text-[14px] sm:text-[16px] leading-normal;
+    color: var(--portflow-muted);
+  }
+
+  .table-label {
+    @apply text-[12px] sm:text-[13px] font-medium;
+    color: var(--portflow-muted);
+  }
+
+  /* Border-radius & Shadow Cards */
+  .card-panel {
+    background-color: var(--portflow-surface);
+    border: 1px solid var(--portflow-border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-card);
+  }
+
+  .card-main {
+    background-color: var(--portflow-surface);
+    border: 1px solid var(--portflow-border);
+    border-radius: var(--radius-card-main);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 200ms ease;
+  }
+  .card-main:hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  .card-standard {
+    background-color: var(--portflow-surface);
+    border: 1px solid var(--portflow-border);
+    border-radius: var(--radius-card-standard);
+    box-shadow: var(--shadow-card);
+    transition: box-shadow 200ms ease;
+  }
+  .card-standard:hover {
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  /* Buttons & Interactive Controls */
+  .btn-primary {
+    @apply inline-flex items-center justify-center font-medium rounded-xl px-4 py-2 text-white transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-amber-500/40;
+    background-color: var(--portflow-amber);
+  }
+  .btn-primary:hover {
+    background-color: var(--portflow-amber-hover);
+  }
+
+  .btn-navy {
+    @apply inline-flex items-center justify-center font-medium rounded-xl px-4 py-2 text-white transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-900/40;
+    background-color: var(--portflow-navy);
+  }
+  .btn-navy:hover {
+    background-color: var(--portflow-navy-hover);
+  }
+
+  /* Badges & Tags */
+  .badge-tag {
+    @apply inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply badge-tag;
+    background-color: var(--portflow-amber-soft);
+    color: var(--portflow-amber);
+  }
+
+  .badge-warning {
+    @apply badge-tag;
+    background-color: var(--portflow-orange-soft);
+    color: var(--portflow-orange);
+  }
+
+  .badge-copilot {
+    @apply badge-tag;
+    background-color: var(--portflow-purple-soft);
+    color: var(--portflow-purple);
+  }
+
+  .badge-approved {
+    @apply badge-tag;
+    background-color: var(--portflow-green-soft);
+    color: var(--portflow-green);
+  }
+
+  .badge-critical {
+    @apply badge-tag;
+    background-color: var(--portflow-red-soft);
+    color: var(--portflow-red);
+  }
 }
