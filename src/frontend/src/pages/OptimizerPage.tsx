@@ -126,23 +126,12 @@ export default function OptimizerPage() {
     }
   }
 
-  const formatTime = (isoStr: string) =>
-    new Date(isoStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-
   const formatDate = (isoStr: string) => {
     const d = new Date(isoStr)
     return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
   }
 
   const m = plan?.metrics
-
-  // Compute high-risk count (waiting > 4h = high risk)
-  const fifoHighRisk = plan ? plan.assignments.filter(a => {
-    // FIFO estimate: proportional to their queue position
-    return a.waiting_minutes > 240
-  }).length : 0
-  const optHighRisk = plan ? plan.assignments.filter(a => a.waiting_minutes > 240).length : 0
-  const conflictsResolved = m ? Math.max(0, plan?.unscheduled?.length ?? 0) : 0
 
   const selectedScenario = SCENARIOS.find(s => s.id === scenario)
 

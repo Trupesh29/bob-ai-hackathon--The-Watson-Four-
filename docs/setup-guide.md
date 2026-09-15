@@ -1,322 +1,105 @@
 # Setup Guide — PortFlow AI
 
-> **Status (Plan 4):** FastAPI health endpoint, SQLAlchemy ORM models, Alembic migrations,
-> synthetic data generator, dashboard API endpoints, and React dashboard are implemented.
-> `baseline_rule_v1` congestion calculator is live — not a trained ML model.
-> ML pipeline and OR-Tools optimiser are not yet implemented (Plans 5–6).
-> Repository URL is pending (see `submission.yaml`).
-
----
-
 ## Prerequisites
 
-| Requirement | Minimum version | Notes |
-|---|---|---|
-| Git | 2.40+ | For cloning the repository |
-| Python | 3.12 | Use `pyenv` or `mise` to manage versions |
-| Node.js | 20 LTS | Frontend build toolchain |
-| npm | 10+ | Bundled with Node 20 |
-| PostgreSQL | 15+ | Local instance or Docker; cloud option: Render or IBM Cloud Databases |
-| (Optional) Docker | 24+ | Simplifies PostgreSQL local setup |
+Git, Python 3.12, Node.js 20.19+ (or a supported newer release), and npm. PostgreSQL 15+ is required for the PostgreSQL deployment path; SQLite supports a local demonstration. External IBM credentials are optional. Run Python commands from `src/` after activating the repository-root `.venv`.
 
----
+## Local setup (Windows PowerShell)
 
-## Repository
-
-```bash
-# The public repository URL is pending creation from the official IBM Bobathon template.
-# Replace <REPOSITORY_URL> with the confirmed URL from submission.yaml once available.
-git clone <REPOSITORY_URL>
-cd bob-ai-hackathon-portflow-ai
-```
-
-All application code is under `src/`.
-
----
-
-## 1. Database Setup
-
-### Option A — Docker (recommended for local development)
-
-```bash
-docker run -d \
-  --name portflow-postgres \
-  -e POSTGRES_USER=portflow \
-  -e POSTGRES_PASSWORD=portflow_dev \
-  -e POSTGRES_DB=portflow \
-  -p 5432:5432 \
-  postgres:15-alpine
-```
-
-### Option B — Local PostgreSQL
-
-```sql
-CREATE USER portflow WITH PASSWORD 'portflow_dev';
-CREATE DATABASE portflow OWNER portflow;
-```
-
----
-
-## 2. Backend Setup
-
-```bash
-cd src/backend
-
-# Create and activate virtual environment
+```powershell
+git clone https://github.com/Trupesh29/bob-ai-hackathon--The-Watson-Four-.git
+cd bob-ai-hackathon--The-Watson-Four-
 python -m venv .venv
-
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-
-# macOS / Linux
-# source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-```
-
-Edit `src/backend/.env` and set at minimum:
-
-```ini
-DATABASE_URL=postgresql+psycopg://portflow:change-me@localhost:5432/portflow
-APP_ENV=development
-SYNTHETIC_DATA_SEED=2026
-```
-
-**Required environment variables (Plan 3+):**
-
-| Variable | Description | Default |
-|---|---|---|
-| `DATABASE_URL` | PostgreSQL psycopg3 connection string | — (required) |
-| `APP_ENV` | `development`, `test`, or `production` | `development` |
-| `SYNTHETIC_DATA_SEED` | Seed for reproducible synthetic data generation | `2026` |
-
-```bash
-# Create the PostgreSQL database (if not using Docker)
-createdb -U portflow portflow
-
-# Run database migrations (from src/)
-python -m alembic -c database/alembic.ini upgrade head
-
-# Verify migration applied
-python -m alembic -c database/alembic.ini current
-
-# Seed synthetic demo data (from src/) — safe to run multiple times
+.\.venv\Scripts\Activate.ps1
+Remove-Item Env:PIP_PREFIX -ErrorAction SilentlyContinue
+python -m pip install -r src/backend/requirements.txt
+Copy-Item src/backend/.env.example src/backend/.env
+# Edit src/backend/.env: set DATABASE_URL=sqlite:///./portflow_demo.db
+cd src
 python -m data.seed
-
-# Re-seed from scratch (dev/test only)
-python -m data.seed --reset
-
-# Start the backend API server (from src/)
-python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+python -X utf8 -m ml.congestion_train
+python -X utf8 -m ml.waiting_train
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 ```
 
-**Health check:**
+The backend loads `src/backend/.env` independently of the current directory. Environment variables override that file. SQLite creates the local tables automatically; PostgreSQL uses Alembic. Training produces git-ignored artifacts in `src/ml/artifacts/`. Restart the API after training so the startup lifespan loads both models. Missing artifacts produce HTTP 503 in ML mode; baseline mode remains available.
 
-```bash
-curl http://localhost:8000/api/v1/health
-# Expected: {"status": "healthy", "service": "portflow-api", "version": "0.1.0"}
-```
+In a new terminal, from the repository root:
 
-**Plan 4 dashboard API endpoints (require seeded data):**
-
-```bash
-# Dashboard KPI summary
-curl "http://localhost:8000/api/v1/dashboard/summary?port_code=FKPFL"
-
-# 72-hour congestion horizon (12 × 6-hour windows, baseline_rule_v1)
-curl "http://localhost:8000/api/v1/dashboard/congestion?port_code=FKPFL"
-
-# With a scenario
-curl "http://localhost:8000/api/v1/dashboard/congestion?port_code=FKPFL&scenario=arrival_surge"
-
-# Vessel schedules
-curl "http://localhost:8000/api/v1/schedules?port_code=FKPFL"
-
-# Berths and cranes
-curl "http://localhost:8000/api/v1/resources/berths?port_code=FKPFL"
-curl "http://localhost:8000/api/v1/resources/cranes?port_code=FKPFL"
-
-# Available scenarios
-curl "http://localhost:8000/api/v1/scenarios"
-```
-
-**Scenario options:** `baseline`, `arrival_surge`, `crane_outage`, `berth_closure`, `handling_slowdown`
-
-**baseline_rule_v1 formula (transparent, deterministic — not ML):**
-
-```
-For each 6-hour bucket in the 72-hour horizon:
-  occupancy = arrivals_in_bucket / operational_berth_count
-  adjusted  = min(2.0, occupancy × scenario_multiplier)
-  normalised = min(1.0, adjusted)
-  risk_probability = piecewise_linear(normalised)
-  risk_level = low(<0.4) | medium(<0.7) | high(<0.9) | critical(≥0.9)
-  estimated_queue = max(0, arrivals - berths)
-
-Scenario multipliers:
-  baseline: 1.0  arrival_surge: 1.5  crane_outage: 1.3
-  berth_closure: 1.4  handling_slowdown: 1.2
-```
-
-This formula does NOT claim statistical accuracy or trained-model confidence.
-
-**Interactive API docs:**
-Open `http://localhost:8000/api/v1/docs` in a browser (Swagger UI).
-
----
-
-## 3. Frontend Setup
-
-Open a new terminal:
-
-```bash
+```powershell
 cd src/frontend
-
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.example .env
-```
-
-Edit `src/frontend/.env`:
-
-```ini
-VITE_API_URL=http://localhost:8000
-VITE_APP_TITLE=PortFlow AI
-```
-
-```bash
-# Start the development server
+npm ci
+Copy-Item .env.example .env
 npm run dev
 ```
 
-Open `http://localhost:5173` in a browser.
+For macOS/Linux, activate with `source .venv/bin/activate`, use `cp` for file copies, and unset `PIP_PREFIX` if configured.
 
----
+## Configuration
 
-## 4. Copilot Modes
+Backend examples: `src/backend/.env.example`; frontend examples: `src/frontend/.env.example`. `src/.env.example` indexes all settings. Never put secrets in browser variables or commit real `.env` files.
 
-PortFlow Copilot always works locally through `POST /api/v1/copilot/ask`. Its
-default **Local PortFlow API** mode answers operational questions from the
-planning database: congestion, vessel waiting times, berth/crane availability,
-routing, and the next planning step. It does not need an API key.
-
-To use an IBM Watsonx deployment for more open-ended natural-language answers,
-set these values in `src/backend/.env` and restart the backend:
-
-```ini
-COPILOT_PROVIDER=ibm_bob
-IBM_BOB_API_KEY=<your IBM Cloud API key>
-IBM_BOB_MODEL=<your Watsonx deployment ID>
-IBM_BOB_BASE_URL=https://us-south.ml.cloud.ibm.com
-```
-
-`IBM_BOB_MODEL` is a Watsonx deployment ID, not a display model name. The
-backend exchanges the API key for an IBM Cloud IAM token; the key is never sent
-to the browser or returned by the API. If the IBM service is unavailable or
-these values are missing, PortFlow automatically continues with Local PortFlow
-API mode instead of failing the chat.
-
-## 5. ML Model Training
-
-```bash
-cd src/backend
-
-# Generate synthetic training data (uses RANDOM_SEED from .env)
-python -m app.data.generate_synthetic
-
-# Train and serialise the congestion prediction model
-python -m app.ml.train
-
-# Verify the model artefact exists
-ls app/ml/models/
-# Expected: congestion_model_v1.joblib
-```
-
----
-
-## 6. Running Tests
-
-```bash
-# Backend unit and integration tests (from src/)
-python -m pytest backend/tests -q
-# Expected: 34 passed, 1 skipped
-
-# Frontend unit tests (from src/frontend/)
-npm test
-# Expected: 7 passed
-
-# Frontend type check (from src/frontend/)
-npm run typecheck
-
-# Frontend lint (from src/frontend/)
-npm run lint
-```
-
----
-
-## 7. Building for Production
-
-```bash
-# Frontend production build
-cd src/frontend
-npm run build
-# Output: dist/
-
-# Backend — use a production ASGI server
-cd src/backend
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-```
-
----
-
-## 8. Deployment (Pending)
-
-Deployment has not been completed.  When a working public URL is confirmed,
-this section will be updated and `demo/live-demo-url.txt` will be populated.
-
-**Intended targets:**
-
-| Component | Platform |
+| Variable | Purpose / default |
 |---|---|
-| PostgreSQL | Render Managed PostgreSQL or IBM Cloud Databases for PostgreSQL |
-| FastAPI | Render Web Service or IBM Cloud Code Engine |
-| React static build | Render Static Site, Vercel, or IBM Cloud Object Storage |
+| APP_NAME | API display name, PortFlow AI API |
+| APP_ENV | development locally; production for hosting |
+| APP_VERSION | API version, 0.1.0 |
+| API_V1_PREFIX | /api/v1 |
+| DATABASE_URL | PostgreSQL psycopg URL; use sqlite:///./portflow_demo.db locally |
+| CORS_ORIGINS | JSON list or comma-separated frontend origins; localhost:5173 locally |
+| LOG_LEVEL | INFO |
+| SYNTHETIC_DATA_SEED | 2026 |
+| ML_ARTIFACT_DIR | Optional override; defaults to src/ml/artifacts |
+| COPILOT_PROVIDER | Empty for local rules; ibm_bob for optional Watsonx deployment |
+| IBM_BOB_API_KEY | Private IBM Cloud API key; optional |
+| IBM_BOB_MODEL | Watsonx deployment ID; optional |
+| IBM_BOB_BASE_URL | Regional Watsonx ML service base URL; optional |
+| VITE_API_BASE_URL | http://localhost:8000/api/v1; compiled into the frontend |
+| VITE_DEFAULT_PORT_ID | FKPFL if unset |
+| PORTFLOW_API_BASE | MCP API URL; defaults to http://localhost:8000/api/v1 |
 
-**Render quick reference (backend):**
+## Verification and tests
 
+Health: `GET /api/v1/health` returns status healthy, service portflow-api, version 0.1.0. This is application liveness, not a database readiness probe. Swagger: `/api/v1/docs`.
+
+From `src/`:
+
+```powershell
+python -m pytest backend/tests ml/tests optimizer/tests -q
+python -X utf8 -m ml.congestion_evaluate
+python -X utf8 -m ml.waiting_evaluate
 ```
-Build command: pip install -r src/backend/requirements.txt
-Start command: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2
-Root directory: src/backend
-```
 
-**Render quick reference (frontend):**
+From `src/frontend/`: `npm test`, `npm run build`, `npm run lint`, `npm audit`.
 
-```
-Build command: npm install && npm run build
-Publish directory: dist
-Root directory: src/frontend
-```
+From `src/mcp/`: `npm ci`, `npm run build`. See its README for Bob registration. A build alone does not verify a live Bob session.
 
----
+Demo: submit schedules in Data Input, inspect Dashboard and Predictions, review vessel routing, run Optimizer, review Operations Plan and acknowledge approval, inspect Berth Map, and ask Copilot an operational question. Verify baseline and ML modes, loading/error states, and actual outputs. Approval is ephemeral and does not save an active schedule.
 
-## 9. Troubleshooting
+## PostgreSQL and deployment
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `alembic upgrade head` fails | `DATABASE_URL` not set or DB not running | Check `src/backend/.env` and confirm PostgreSQL is reachable via `psql $DATABASE_URL` |
-| `sqlalchemy.exc.OperationalError: connection refused` | PostgreSQL not started | `docker start portflow-postgres` or `pg_ctl start` |
-| `role "portflow" does not exist` | PostgreSQL user not created | Run `createuser -s portflow` then `createdb -U portflow portflow` |
-| `ModuleNotFoundError` on backend start | Virtual environment not activated or wrong dir | Activate `src/.venv` and run from `src/` |
-| `ModuleNotFoundError: No module named 'data'` | Running `seed.py` from wrong directory | Run `python -m data.seed` from `src/`, not `src/data/` |
-| `python -m alembic` not found | Alembic not installed | Run `pip install -r src/backend/requirements.txt` |
-| Migration `revision not found` | Running alembic from wrong directory | Always run `python -m alembic -c database/alembic.ini ...` from `src/` |
-| `seed --reset` blocked in production | APP_ENV is not `development` or `test` | Only use `--reset` in dev/test environments |
-| `VITE_API_BASE_URL` not applied | `.env` file missing in `src/frontend/` | Copy `.env.example` to `.env` and restart `npm run dev` |
-| Port 8000 already in use | Another process bound to 8000 | `python -m uvicorn backend.app.main:app --port 8001` and update `VITE_API_BASE_URL` |
+No hosting deployment has been confirmed. These are configuration instructions, not deployment evidence.
+
+Backend root directory: `src`. Build command: `pip install -r backend/requirements.txt`. Set `DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:5432/DATABASE`, `APP_ENV=production`, and `CORS_ORIGINS` to the actual frontend HTTPS origin. Use private hosting environment settings for credentials.
+
+Initialize the PostgreSQL schema from `src/` with `python -m alembic -c database/alembic.ini upgrade head`. Seed synthetic demo data with `python -m data.seed`. Do not use `--reset` on production. Train both models with the commands above before starting the service; build-generated files must be included in the runtime image/storage.
+
+Render/Linux start command: `python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`. Starting from `src/backend/` would break package imports. PostgreSQL URL schemes supplied by hosting must use the configured psycopg driver.
+
+Frontend root: `src/frontend`; build: `npm ci && npm run build`; publish: `dist`. Set `VITE_API_BASE_URL=https://YOUR_BACKEND_HOST/api/v1` before the build. Configure a fallback rewrite to `/index.html` for React routes such as `/predictions`. The Vite development proxy is not part of the static production build.
+
+SQLite files on ephemeral hosting are not durable. Demo data-entry endpoints lack production authentication; use synthetic data only and add access controls before operational deployment. Public hosting is optional under the supplied submission guide.
+
+## Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| Packages installed but imports fail | Clear machine-wide PIP_PREFIX before installing into the active venv |
+| Cannot import backend, data, ml, optimizer | Activate the correct venv and run from src/ |
+| ML requests return 503 | Train both models and restart backend; check ML_ARTIFACT_DIR |
+| Training Unicode error on Windows | Use python -X utf8 |
+| Database connection refused | Check private DATABASE_URL, database availability, and migrations |
+| UI cannot reach API | Check API startup, VITE_API_BASE_URL including /api/v1, and CORS_ORIGINS |
+| Direct frontend route returns 404 on hosting | Configure the SPA fallback to /index.html |
+
+Clean backend/ML/end-to-end rehearsal remains pending; do not interpret these corrected instructions as a completed runtime test.

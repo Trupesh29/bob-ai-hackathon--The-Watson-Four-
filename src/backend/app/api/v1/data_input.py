@@ -237,6 +237,10 @@ async def import_vessel_schedules_csv(
 
     for row_num, raw_row in enumerate(reader, start=1):
         # Normalise keys
+        if None in raw_row:
+            errors.append(CSVImportRowError(row=row_num, error="Too many columns in CSV row"))
+            skipped += 1
+            continue
         row = {k.strip().lower(): (v or "").strip() for k, v in raw_row.items()}
         imo = row.get("imo_number", "")
         name = row.get("vessel_name", "")
@@ -278,6 +282,10 @@ async def import_vessel_schedules_csv(
             continue
         if not (0 < draft_m <= 35):
             row_error("draft_m out of range 0–35")
+            skipped += 1
+            continue
+        if not (0 < beam_m <= 100) or not (0 <= expected_containers <= 100000):
+            row_error("beam_m or expected_containers out of range")
             skipped += 1
             continue
         if not (1 <= priority <= 5):
@@ -407,7 +415,7 @@ def update_crane_status(
 
 # ── Demo disruption scenario loader ────────────────────────────────────────────
 
-_DISRUPTION_CSV_PATH = Path(__file__).resolve().parents[5] / "data" / "disruption_scenario.csv"
+_DISRUPTION_CSV_PATH = Path(__file__).resolve().parents[4] / "data" / "disruption_scenario.csv"
 
 # Number of cranes / berths to put in maintenance to create the crisis
 _CRANES_TO_DISABLE = 2
@@ -509,7 +517,7 @@ def load_demo_scenario(
                 priority=int(row["priority"]),
                 status="scheduled",
                 source="demo_scenario",
-                is_synthetic=False,
+                is_synthetic=True,
             )
             db.add(schedule)
             imported += 1
