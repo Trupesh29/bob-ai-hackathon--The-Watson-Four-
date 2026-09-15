@@ -24,6 +24,7 @@ from .api.v1.waiting_times import router as waiting_times_router
 from .api.v1.alternate_routing import router as alternate_routing_router
 from .api.v1.copilot import router as copilot_router
 from .api.v1.operations_plan import router as operations_plan_router
+from .api.v1.data_input import router as data_input_router
 from .core.config import settings
 from .core.errors import generic_exception_handler, validation_exception_handler
 
@@ -121,6 +122,7 @@ def create_app() -> FastAPI:
     app.include_router(alternate_routing_router, prefix=settings.api_v1_prefix)
     app.include_router(copilot_router, prefix=settings.api_v1_prefix)
     app.include_router(operations_plan_router, prefix=settings.api_v1_prefix)
+    app.include_router(data_input_router, prefix=settings.api_v1_prefix)
 
     logger.info(
         "PortFlow AI API started | env=%s | version=%s",

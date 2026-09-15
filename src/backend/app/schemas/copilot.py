@@ -43,6 +43,8 @@ class CopilotContextSnapshot(BaseModel):
     active_vessel_count: int
     arrivals_next_24h: int
     avg_estimated_waiting_minutes: float
+    available_crane_count: int = 0
+    berth_occupancy_pct: float = 0.0
     high_risk_vessels: List[str] = Field(
         description="vessel_name list with risk_level high or above"
     )

@@ -214,7 +214,7 @@ export default function VesselsPage() {
       <PageHeader
         title="Vessel Schedule"
         subtitle={`Operational port call tracking, queue predictions, and quayside berth plans · Port ${portCode}`}
-        badge={<StatusBadge status="active" label="Synthetic demo data" size="sm" />}
+        badge={<StatusBadge status="active" label="Planning database" size="sm" />}
         actions={
           <div className="flex items-center gap-2">
             {/* Horizon toggle */}
@@ -462,7 +462,7 @@ export default function VesselsPage() {
                   </span>
                 </div>
                 <div className="text-xs text-portflow-muted">
-                  Scenario: <span className="font-semibold text-portflow-navy">{scenario}</span> · Synthetic records
+                  Scenario: <span className="font-semibold text-portflow-navy">{scenario}</span> · Database records
                 </div>
               </div>
 
@@ -475,7 +475,7 @@ export default function VesselsPage() {
                       <th className="px-4 py-3.5">Vessel</th>
                       <th className="px-4 py-3.5">ETA</th>
                       <th className="px-4 py-3.5">Priority</th>
-                      <th className="px-4 py-3.5">Size / TEU</th>
+                      <th className="px-4 py-3.5">Expected Containers</th>
                       <th className="px-4 py-3.5">Predicted wait</th>
                       <th className="px-4 py-3.5">Risk</th>
                       <th className="px-4 py-3.5">Assigned berth</th>
@@ -566,12 +566,12 @@ export default function VesselsPage() {
                             </div>
                           </td>
 
-                          {/* Column 4: Size / TEU */}
+                          {/* Column 4: Expected containers */}
                           <td className="block md:table-cell px-0 md:px-4 py-1.5 md:py-3.5 text-xs text-portflow-muted">
                             <div className="flex items-center justify-between md:justify-start">
-                              <span className="md:hidden text-xs text-portflow-muted font-medium">Size / TEU:</span>
+                              <span className="md:hidden text-xs text-portflow-muted font-medium">Expected containers:</span>
                               <span>
-                                <strong className="text-portflow-ink font-semibold">{s.expected_containers}</strong> TEU
+                                <strong className="text-portflow-ink font-semibold">{s.expected_containers}</strong> containers
                                 <span className="text-portflow-muted text-[11px] ml-1">({s.cargo_type})</span>
                               </span>
                             </div>

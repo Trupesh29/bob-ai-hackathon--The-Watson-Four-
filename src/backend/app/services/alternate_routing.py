@@ -223,7 +223,6 @@ def compute_alternate_routing(
                 )
                 .where(
                     VesselSchedule.id == target_sched_uuid,
-                    VesselSchedule.is_synthetic == True,  # noqa: E712
                 )
                 .limit(1)
             )
@@ -246,7 +245,6 @@ def compute_alternate_routing(
             )
             .where(
                 VesselSchedule.vessel_id == vessel_uuid,
-                VesselSchedule.is_synthetic == True,  # noqa: E712
             )
             .order_by(
                 HistoricalOperation.waiting_minutes.desc().nullslast(),

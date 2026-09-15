@@ -7,13 +7,20 @@
  */
 
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
   fetchOperationsPlan,
   DEFAULT_PORT_CODE,
   ApiRequestError,
 } from '../services/api'
 import type { OperationsPlanResponse, ScenarioId } from '../types/api'
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => window.setTimeout(() => reject(new Error('The solver is taking longer than expected. Please retry with a shorter time limit.')), timeoutMs)),
+  ])
+}
 
 const SCENARIOS: { id: ScenarioId; label: string; description: string }[] = [
   { id: 'baseline', label: 'Baseline', description: 'Standard operating conditions' },
@@ -25,7 +32,6 @@ const SCENARIOS: { id: ScenarioId; label: string; description: string }[] = [
 
 export default function OptimizerPage() {
   const portCode = DEFAULT_PORT_CODE
-  const navigate = useNavigate()
 
   // Solver parameters
   const [scenario, setScenario] = useState<ScenarioId>('baseline')
@@ -41,12 +47,15 @@ export default function OptimizerPage() {
     setStatus('running')
     setError(null)
     try {
-      const result = await fetchOperationsPlan({
-        port_code: portCode,
-        horizon_hours: horizonHours,
-        solve_limit_seconds: timeLimitSec,
-        scenario,
-      })
+      const result = await withTimeout(
+        fetchOperationsPlan({
+          port_code: portCode,
+          horizon_hours: horizonHours,
+          solve_limit_seconds: timeLimitSec,
+          scenario,
+        }),
+        (timeLimitSec + 15) * 1000,
+      )
       setPlan(result)
       setStatus('ready')
     } catch (err) {
@@ -214,6 +223,14 @@ export default function OptimizerPage() {
             <div className="card-main border-red-200 bg-[#FCE8E6] p-6">
               <h2 className="text-[#C94B43] font-bold mb-2">Optimization Failed</h2>
               <p className="text-[#C94B43] text-sm">{error}</p>
+            </div>
+          )}
+
+          {status === 'running' && (
+            <div className="card-main p-12 text-center flex flex-col items-center justify-center bg-white min-h-[400px]">
+              <div className="w-12 h-12 rounded-full border-4 border-[#D99119]/25 border-t-[#D99119] animate-spin mb-4" />
+              <h3 className="text-xl font-bold text-[#231F20] mb-2">Creating a feasible plan</h3>
+              <p className="text-sm text-[#6F6761] max-w-md">The solver may use up to {timeLimitSec} seconds, plus a short response time. Keep this page open while it evaluates berth and crane constraints.</p>
             </div>
           )}
 

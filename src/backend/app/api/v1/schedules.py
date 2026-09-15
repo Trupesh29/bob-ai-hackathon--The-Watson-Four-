@@ -1,8 +1,7 @@
 """
 Schedules API endpoint — GET /api/v1/schedules.
 
-Returns vessel schedule records from seeded PostgreSQL data.
-Filtered by port_code; all records include is_synthetic=True.
+Returns vessel schedule records from the planning database, including supervisor-entered records.
 """
 
 from __future__ import annotations
@@ -37,8 +36,8 @@ def get_schedules(
     Return vessel schedules for the requested port and scenario.
 
     Schedules are read directly from the seeded PostgreSQL database.
-    The scenario parameter filters the is_synthetic records by the
-    scenario label stored at generation time — it does NOT modify records.
+    The scenario parameter changes analytical simulations; it does not hide
+    supervisor-entered planning records.
     """
     if scenario not in VALID_SCENARIOS:
         raise HTTPException(
@@ -96,7 +95,6 @@ def get_schedules(
         .join(Vessel, VesselSchedule.vessel_id == Vessel.id)
         .filter(
             sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-            VesselSchedule.is_synthetic == True,  # noqa: E712
         )
         .order_by(VesselSchedule.eta)
         .all()
@@ -111,7 +109,6 @@ def get_schedules(
         .join(Berth, VesselSchedule.preferred_berth_id == Berth.id, isouter=True)
         .filter(
             sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-            VesselSchedule.is_synthetic == True,  # noqa
         )
         .all()
     )
@@ -124,7 +121,6 @@ def get_schedules(
         .join(VesselSchedule, HistOp.schedule_id == VesselSchedule.id)
         .filter(
             sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-            VesselSchedule.is_synthetic == True,  # noqa
         )
         .all()
     )

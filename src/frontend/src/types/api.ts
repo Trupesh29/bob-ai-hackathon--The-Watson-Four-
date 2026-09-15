@@ -91,6 +91,36 @@ export interface SchedulesResponse {
   is_synthetic: boolean
 }
 
+// ── Supervisor data input ───────────────────────────────────────────────────
+
+export interface VesselScheduleCreateRequest {
+  port_code: string
+  imo_number: string
+  vessel_name: string
+  operator_name: string
+  capacity_teu: number
+  length_m: number
+  beam_m: number
+  draft_m: number
+  eta: string
+  expected_containers: number
+  priority: number
+  cargo_type: string
+  preferred_berth_code?: string
+}
+
+export interface VesselScheduleCreateResponse {
+  schedule_id: string
+  vessel_id: string
+  message: string
+}
+
+export interface ResourceStatusResponse {
+  resource_id: string
+  status: string
+  message: string
+}
+
 // ── Resources — Berths ───────────────────────────────────────────────────────
 
 export interface BerthItem {

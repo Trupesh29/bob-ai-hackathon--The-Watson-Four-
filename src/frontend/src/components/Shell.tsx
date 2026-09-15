@@ -21,6 +21,10 @@ const PAGE_META: Record<string, PageMeta> = {
     title: 'Vessels',
     subtitle: 'Active vessel schedules, arrival manifests, and berthing assignments',
   },
+  '/data-input': {
+    title: 'Data Input Center',
+    subtitle: 'Add vessel schedules and update berth or crane availability',
+  },
   '/optimizer': {
     title: 'Optimizer',
     subtitle: 'Automated berth scheduling and crane resource allocation engine',
@@ -105,7 +109,7 @@ export function Shell() {
 
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-portflow-amberSoft border border-portflow-amber/30 text-portflow-amber font-medium">
                 <span className="text-portflow-amberHover font-normal">Scenario:</span>
-                <span className="font-semibold text-portflow-ink">Traffic Surge</span>
+                <span className="font-semibold text-portflow-ink">Select on page</span>
               </div>
 
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-portflow-canvas border border-portflow-border text-portflow-muted">

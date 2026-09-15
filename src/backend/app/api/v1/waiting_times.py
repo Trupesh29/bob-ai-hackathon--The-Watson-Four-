@@ -174,7 +174,6 @@ def get_waiting_times(
         .join(Vessel, VesselSchedule.vessel_id == Vessel.id)
         .filter(
             sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-            VesselSchedule.is_synthetic == True,  # noqa: E712
         )
         .order_by(VesselSchedule.eta)
         .all()

@@ -10,6 +10,13 @@ import { useState, useCallback, useRef } from 'react'
 import { fetchOperationsPlan, approveOperationsPlan, DEFAULT_PORT_CODE, ApiRequestError } from '../services/api'
 import type { OperationsPlanResponse } from '../types/api'
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => window.setTimeout(() => reject(new Error('Plan generation timed out. Try again or open Optimizer to use a shorter solve limit.')), timeoutMs)),
+  ])
+}
+
 function fmtMinutes(m: number): string {
   if (m < 60) return `${Math.round(m)}m`
   const h = Math.floor(m / 60)
@@ -59,7 +66,7 @@ export default function OperationsPlanPage() {
     setActionTimestamp(null)
     setOverrideAdverse(false)
 
-    fetchOperationsPlan({ port_code: portCode, horizon_hours: 72 })
+    withTimeout(fetchOperationsPlan({ port_code: portCode, horizon_hours: 72 }), 30_000)
       .then(p => {
         setPlan(p)
         setWorkflowState('generated')
@@ -132,7 +139,7 @@ export default function OperationsPlanPage() {
     }
   }
 
-  const isAdversePlan = plan ? (plan.metrics.wait_reduction_minutes <= 0 || plan.unscheduled.length > 0) : false
+  const isAdversePlan = plan ? ((plan.metrics?.wait_reduction_minutes ?? 0) <= 0 || plan.unscheduled.length > 0) : false
 
   return (
     <div className="space-y-6 lg:space-y-8 pb-12">
@@ -181,7 +188,7 @@ export default function OperationsPlanPage() {
         <div className="card-main p-12 text-center bg-white flex flex-col items-center justify-center min-h-[300px]">
           <h3 className="text-xl font-bold text-[#231F20] mb-4">Start Planning Cycle</h3>
           <p className="text-[#6F6761] max-w-md mx-auto mb-8">
-            Generate a new 72-hour CP-SAT optimal assignment plan. The solver will ingest current vessel queues and constraints.
+            Generate a new 72-hour CP-SAT assignment plan. The solver normally completes within a few seconds; this page will show a clear error if it takes longer than 30 seconds.
           </p>
           <button
             onClick={generatePlan}
@@ -190,6 +197,9 @@ export default function OperationsPlanPage() {
           >
             {workflowState === 'generating' ? '⏳ Generating Plan...' : 'Generate Plan'}
           </button>
+          {workflowState === 'generating' && (
+            <p className="mt-4 text-xs text-[#6F6761] animate-pulse">Checking vessel, berth, and crane constraints. Please keep this page open.</p>
+          )}
         </div>
       ) : plan ? (
         <div className="space-y-6">

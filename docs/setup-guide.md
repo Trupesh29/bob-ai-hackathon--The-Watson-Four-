@@ -199,7 +199,30 @@ Open `http://localhost:5173` in a browser.
 
 ---
 
-## 4. ML Model Training
+## 4. Copilot Modes
+
+PortFlow Copilot always works locally through `POST /api/v1/copilot/ask`. Its
+default **Local PortFlow API** mode answers operational questions from the
+planning database: congestion, vessel waiting times, berth/crane availability,
+routing, and the next planning step. It does not need an API key.
+
+To use an IBM Watsonx deployment for more open-ended natural-language answers,
+set these values in `src/backend/.env` and restart the backend:
+
+```ini
+COPILOT_PROVIDER=ibm_bob
+IBM_BOB_API_KEY=<your IBM Cloud API key>
+IBM_BOB_MODEL=<your Watsonx deployment ID>
+IBM_BOB_BASE_URL=https://us-south.ml.cloud.ibm.com
+```
+
+`IBM_BOB_MODEL` is a Watsonx deployment ID, not a display model name. The
+backend exchanges the API key for an IBM Cloud IAM token; the key is never sent
+to the browser or returned by the API. If the IBM service is unavailable or
+these values are missing, PortFlow automatically continues with Local PortFlow
+API mode instead of failing the chat.
+
+## 5. ML Model Training
 
 ```bash
 cd src/backend
@@ -217,7 +240,7 @@ ls app/ml/models/
 
 ---
 
-## 5. Running Tests
+## 6. Running Tests
 
 ```bash
 # Backend unit and integration tests (from src/)
@@ -237,7 +260,7 @@ npm run lint
 
 ---
 
-## 6. Building for Production
+## 7. Building for Production
 
 ```bash
 # Frontend production build
@@ -252,7 +275,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
 ---
 
-## 7. Deployment (Pending)
+## 8. Deployment (Pending)
 
 Deployment has not been completed.  When a working public URL is confirmed,
 this section will be updated and `demo/live-demo-url.txt` will be populated.
@@ -283,7 +306,7 @@ Root directory: src/frontend
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|

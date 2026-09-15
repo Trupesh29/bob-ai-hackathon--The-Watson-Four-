@@ -223,7 +223,6 @@ def compute_congestion_horizon(
             db.query(func.min(VesselSchedule.eta))
             .filter(
                 sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-                VesselSchedule.is_synthetic == True,  # noqa: E712
             )
             .scalar()
         )
@@ -253,7 +252,6 @@ def compute_congestion_horizon(
             db.query(sa_cast(VesselSchedule.id, SAStr).label("sched_id"), VesselSchedule.eta)
             .filter(
                 sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-                VesselSchedule.is_synthetic == True,  # noqa: E712
                 VesselSchedule.eta >= t_start,
                 VesselSchedule.eta < t_end,
             )
@@ -320,7 +318,6 @@ def compute_dashboard_summary(
         db.query(func.count(VesselSchedule.id))
         .filter(
             sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-            VesselSchedule.is_synthetic == True,  # noqa: E712
         )
         .scalar()
         or 0
@@ -332,7 +329,6 @@ def compute_dashboard_summary(
         db.query(func.min(VesselSchedule.eta))
         .filter(
             sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-            VesselSchedule.is_synthetic == True,  # noqa: E712
         )
         .scalar()
     )
@@ -343,7 +339,6 @@ def compute_dashboard_summary(
             db.query(func.count(VesselSchedule.id))
             .filter(
                 sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-                VesselSchedule.is_synthetic == True,  # noqa: E712
                 VesselSchedule.eta >= horizon_start,
                 VesselSchedule.eta < horizon_end_24h,
             )
@@ -365,7 +360,6 @@ def compute_dashboard_summary(
         db.query(func.count(func.distinct(VesselSchedule.preferred_berth_id)))
         .filter(
             sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-            VesselSchedule.is_synthetic == True,  # noqa: E712
             VesselSchedule.preferred_berth_id.isnot(None),
         )
         .scalar()
@@ -391,7 +385,6 @@ def compute_dashboard_summary(
         db.query(func.count(VesselSchedule.id))
         .filter(
             sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-            VesselSchedule.is_synthetic == True,  # noqa: E712
             VesselSchedule.priority == 1,
         )
         .scalar()
@@ -417,7 +410,6 @@ def compute_dashboard_summary(
         .join(VesselSchedule, HistoricalOperation.schedule_id == VesselSchedule.id)
         .filter(
             sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-            VesselSchedule.is_synthetic == True,  # noqa: E712
         )
         .scalar()
     )
@@ -515,7 +507,6 @@ def compute_congestion_horizon_ml(
             db.query(func.min(VesselSchedule.eta))
             .filter(
                 sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-                VesselSchedule.is_synthetic == True,  # noqa: E712
             )
             .scalar()
         )
@@ -545,7 +536,6 @@ def compute_congestion_horizon_ml(
             )
             .filter(
                 sa_cast(VesselSchedule.port_id, SAStr) == port_id_str,
-                VesselSchedule.is_synthetic == True,  # noqa: E712
                 VesselSchedule.eta >= t_start,
                 VesselSchedule.eta < t_end,
             )

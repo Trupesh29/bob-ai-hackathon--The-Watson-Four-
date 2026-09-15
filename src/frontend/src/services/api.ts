@@ -187,6 +187,33 @@ export function fetchOperationsPlan(
   })
 }
 
+async function writeApi<T>(path: string, method: 'POST' | 'PATCH', body: unknown): Promise<T> {
+  const url = new URL(`${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'}${path}`, window.location.origin)
+  const response = await fetch(url.toString(), {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    let responseBody: unknown
+    try { responseBody = await response.json() } catch { responseBody = { detail: response.statusText } }
+    throw new ApiRequestError(response.status, responseBody, `API ${response.status}: ${response.statusText}`)
+  }
+  return response.json() as Promise<T>
+}
+
+export function createVesselSchedule(
+  request: import('../types/api').VesselScheduleCreateRequest,
+): Promise<import('../types/api').VesselScheduleCreateResponse> {
+  return writeApi('/data-input/vessel-schedules', 'POST', request)
+}
+
+export function updateResourceStatus(
+  resource: 'berths' | 'cranes', resourceId: string, status: string,
+): Promise<import('../types/api').ResourceStatusResponse> {
+  return writeApi(`/data-input/${resource}/${encodeURIComponent(resourceId)}/status`, 'PATCH', { status })
+}
+
 export function approveOperationsPlan(
   planId: string,
 ): Promise<import('../types/api').OperationsPlanApprovalResponse> {

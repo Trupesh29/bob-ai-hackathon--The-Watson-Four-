@@ -1,8 +1,7 @@
 /**
  * PortFlow AI — Predictions Page
  *
- * Visualizes ML-assisted turnaround time predictions and 72-hour congestion forecasts.
- * Distinguishes forecast from fact with explicit confidence intervals and contributing factors.
+ * Visualizes the same baseline operational forecast used by the dashboard.
  */
 
 import { useState, useEffect, useMemo } from 'react'
@@ -90,8 +89,8 @@ export default function PredictionsPage() {
     setStatus('loading')
     setError(null)
     Promise.all([
-      fetchDashboardCongestion(portCode, scenario, 72, 'ml'),
-      fetchWaitingTimes(portCode, 72, 'ml', scenario),
+      fetchDashboardCongestion(portCode, scenario, 72, 'baseline'),
+      fetchWaitingTimes(portCode, 72, 'baseline', scenario),
       fetchBerths(portCode),
     ])
       .then(([cong, wait, b]) => {
@@ -177,7 +176,7 @@ export default function PredictionsPage() {
               Horizon: <strong className="text-portflow-navy">72 hours</strong>
             </span>
             <span className="px-2.5 py-1 rounded-lg bg-portflow-purpleSoft text-portflow-purple border border-portflow-purple/30 font-medium">
-              Model: Random Forest
+              Method: Baseline operational rule
             </span>
           </div>
         </div>
@@ -217,7 +216,7 @@ export default function PredictionsPage() {
             <div className="absolute inset-0 rounded-full border-4 border-portflow-purple border-t-transparent animate-spin" />
           </div>
           <p className="text-portflow-muted text-sm font-medium animate-pulse">
-            Generating Random Forest forecasts…
+            Generating operational forecast…
           </p>
         </div>
       )}
@@ -264,9 +263,9 @@ export default function PredictionsPage() {
 
             {/* 3. Model Method */}
             <MetricCard
-              label="Model Method"
-              value="Random Forest"
-              supportingText="Data source: Synthetic demo data"
+              label="Forecast Method"
+              value="Baseline rule"
+              supportingText="Matches Dashboard and Vessels"
               tone="purple"
               icon={
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -277,9 +276,9 @@ export default function PredictionsPage() {
 
             {/* 4. Confidence Range */}
             <MetricCard
-              label="Confidence Range"
-              value="± 18%"
-              supportingText="Bounded by synthetic simulation"
+              label="Decision Support"
+              value="72 hours"
+              supportingText="Scenario-aware planning horizon"
               tone="navy"
               icon={
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -292,15 +291,15 @@ export default function PredictionsPage() {
           {/* ── 72-Hour Forecast Chart ────────────────────────────────────── */}
           <SurfaceCard
             title="72-Hour Congestion Forecast Horizon"
-            subtitle="6-hour operational observation windows · Random Forest model overlay"
+            subtitle="6-hour operational observation windows · same baseline used across the workspace"
             action={
               <div className="flex items-center gap-2">
                 <span className="text-xs text-portflow-muted font-mono">
-                  Method: {waitingTimes?.calculation_method ?? 'waiting_rf_v1'}
+                  Method: {waitingTimes?.calculation_method ?? 'waiting_baseline_v1'}
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-portflow-purpleSoft text-portflow-purple border border-portflow-purple/20">
-                  <span className="w-3 h-0.5 border-t-2 border-dashed border-portflow-purple inline-block" />
-                  Confidence Envelope
+                  <span className="w-2 h-2 rounded-full bg-portflow-purple inline-block" />
+                  Consistent baseline
                 </span>
               </div>
             }
@@ -396,7 +395,7 @@ export default function PredictionsPage() {
           {/* ── Prediction Table ──────────────────────────────────────────── */}
           <SurfaceCard
             title="Vessel Turnaround & Waiting-Time Predictions"
-            subtitle="Machine-learning predictions with confidence bounds and attribution"
+            subtitle="Scenario-aware waiting estimates and operational causes"
             action={
               <span className="text-xs text-portflow-muted">
                 Showing {waitingTimes?.vessels.length ?? 0} scheduled arrivals
@@ -412,7 +411,7 @@ export default function PredictionsPage() {
                       <th className="text-left py-3 px-3 font-semibold uppercase tracking-wider">ETA</th>
                       <th className="text-left py-3 px-3 font-semibold uppercase tracking-wider">Risk</th>
                       <th className="text-left py-3 px-3 font-semibold uppercase tracking-wider">Wait Estimate</th>
-                      <th className="text-left py-3 px-3 font-semibold uppercase tracking-wider">Confidence</th>
+                      <th className="text-left py-3 px-3 font-semibold uppercase tracking-wider">Estimate Basis</th>
                       <th className="text-left py-3 px-3 font-semibold uppercase tracking-wider">Berths</th>
                       <th className="text-left py-3 px-3 font-semibold uppercase tracking-wider">Why Flagged</th>
                       <th className="text-right py-3 px-3 font-semibold uppercase tracking-wider">Action</th>
@@ -420,16 +419,7 @@ export default function PredictionsPage() {
                   </thead>
                   <tbody className="divide-y divide-portflow-border/70">
                     {waitingTimes.vessels.map(v => {
-                      const confidence =
-                        v.risk_level === 'low'
-                          ? '92% (±0.4h)'
-                          : v.risk_level === 'medium'
-                          ? '86% (±1.1h)'
-                          : v.risk_level === 'high'
-                          ? '79% (±1.8h)'
-                          : '73% (±2.4h)'
-
-                      const berthsCount = 2
+                      const berthSummary = v.primary_cause === 'limited berth compatibility' ? 'Limited' : 'See map'
 
                       return (
                         <tr
@@ -459,10 +449,10 @@ export default function PredictionsPage() {
                             {fmtHours(v.predicted_waiting_hours)}
                           </td>
                           <td className="py-3 px-3 font-mono text-portflow-purple font-medium">
-                            {confidence}
+                            {v.method}
                           </td>
                           <td className="py-3 px-3 text-portflow-ink font-medium">
-                            {berthsCount} compatible
+                            {berthSummary}
                           </td>
                           <td className="py-3 px-3 text-portflow-muted max-w-[200px] truncate">
                             {v.primary_cause ?? 'Simultaneous cluster arrival'}
@@ -512,7 +502,7 @@ export default function PredictionsPage() {
             <div className="p-6 border-b border-portflow-border bg-portflow-canvas/60 flex items-start justify-between gap-4">
               <div>
                 <span className="text-xs font-semibold text-portflow-purple uppercase tracking-wider block mb-1">
-                  ML Risk Attribution
+                  Operational Risk Attribution
                 </span>
                 <h2 className="text-xl font-bold text-portflow-navy">
                   Vessel: {selectedVessel.vessel_name}
@@ -546,7 +536,7 @@ export default function PredictionsPage() {
                     {selectedVessel.predicted_waiting_hours.toFixed(1)} hours
                   </span>
                   <span className="text-[10px] text-portflow-muted block mt-0.5">
-                    Confidence: 86% (±1.1h)
+                    Method: {selectedVessel.method}
                   </span>
                 </div>
 
@@ -572,21 +562,21 @@ export default function PredictionsPage() {
                   <div className="flex items-start gap-2.5 p-3 rounded-xl bg-portflow-canvas/80 border border-portflow-border">
                     <span className="w-2 h-2 rounded-full bg-portflow-amber mt-1.5 shrink-0" />
                     <p className="text-xs text-portflow-ink leading-relaxed">
-                      <strong>7 vessels</strong> scheduled in the same arrival window causing queue buildup.
+                      {selectedVessel.primary_cause ?? 'No single risk driver was returned for this vessel.'}
                     </p>
                   </div>
 
                   <div className="flex items-start gap-2.5 p-3 rounded-xl bg-portflow-canvas/80 border border-portflow-border">
                     <span className="w-2 h-2 rounded-full bg-portflow-orange mt-1.5 shrink-0" />
                     <p className="text-xs text-portflow-ink leading-relaxed">
-                      <strong>2 compatible berths</strong> available based on vessel draft (14.2m) and quay length restrictions.
+                      Current risk level is <strong>{selectedVessel.risk_level}</strong> for the selected {scenario.replace('_', ' ')} scenario.
                     </p>
                   </div>
 
                   <div className="flex items-start gap-2.5 p-3 rounded-xl bg-portflow-canvas/80 border border-portflow-border">
                     <span className="w-2 h-2 rounded-full bg-portflow-red mt-1.5 shrink-0" />
                     <p className="text-xs text-portflow-ink leading-relaxed">
-                      Reduced crane capacity in the selected scenario ({scenario}) constraining container handling rate.
+                      Review the Berth Map and current resource availability before accepting any assignment.
                     </p>
                   </div>
                 </div>
@@ -601,7 +591,7 @@ export default function PredictionsPage() {
                   Review proposed berth assignment
                 </p>
                 <p className="text-[11px] text-portflow-muted leading-relaxed">
-                  Reassign to Berth B02 via CP-SAT Optimization to reduce predicted waiting time by an estimated 2.1 hours.
+                  Run the optimizer to compare feasible berth and crane assignments for this specific vessel. No berth or time-saving value is assumed here.
                 </p>
 
                 <div className="pt-2 flex items-center gap-2">
@@ -622,7 +612,7 @@ export default function PredictionsPage() {
 
               {/* Disclaimer */}
               <div className="p-3 rounded-xl bg-portflow-canvas border border-portflow-border/80 text-[10px] text-portflow-muted leading-relaxed">
-                <strong>Machine-learning attribution:</strong> Random Forest model v1.0 trained on synthetic terminal datasets. Forecasts assist supervisor decision-making and are subject to real-time pilot and harbor master confirmation.
+                <strong>Forecast limitation:</strong> This baseline estimate is derived from local planning data and the selected scenario. It supports supervisor review and is not a real-time navigational instruction.
               </div>
             </div>
           </aside>

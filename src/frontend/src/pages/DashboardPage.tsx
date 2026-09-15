@@ -535,11 +535,11 @@ export default function DashboardPage() {
             }
           />
 
-          {/* 5. Berth occupancy */}
+          {/* 5. Scheduled berth allocation */}
           <MetricCard
-            label="Berth Occupancy"
+            label="Scheduled Berths"
             value={formatPct(summary.berth_occupancy_pct)}
-            supportingText="of total berths allocated"
+            supportingText="planned calls with a preferred berth"
             tone="green"
             testId="kpi-berth-occupancy"
             icon={
@@ -1065,8 +1065,8 @@ export default function DashboardPage() {
           {/* Berth Status Overview */}
           <div data-testid="berth-panel">
             <SurfaceCard
-              title="Berth Occupancy Overview"
-              subtitle="Active quayside resource allocation"
+              title="Berth Availability Overview"
+              subtitle="Current resource status; scheduled allocation is shown above"
             >
               {berths && berths.berths.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

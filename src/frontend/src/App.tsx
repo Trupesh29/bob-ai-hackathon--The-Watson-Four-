@@ -7,6 +7,7 @@ import PredictionsPage from './pages/PredictionsPage'
 import OptimizerPage from './pages/OptimizerPage'
 import OperationsPlanPage from './pages/OperationsPlanPage'
 import CopilotPage from './pages/CopilotPage'
+import DataInputPage from './pages/DataInputPage'
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route element={<Shell />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/vessels" element={<VesselsPage />} />
+          <Route path="/data-input" element={<DataInputPage />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/predictions" element={<PredictionsPage />} />
           <Route path="/optimizer" element={<OptimizerPage />} />

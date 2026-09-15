@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     # Never log or return these values.
     copilot_provider: str = ""
     ibm_bob_api_key: str = ""
+    # IBM Watsonx deployment ID used by the text-generation endpoint.
     ibm_bob_model: str = ""
     ibm_bob_base_url: str = ""
 

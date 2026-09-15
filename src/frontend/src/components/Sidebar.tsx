@@ -12,6 +12,13 @@ export interface NavItem {
 
 export const NAV_LINKS: NavItem[] = [
   {
+    to: '/data-input',
+    label: 'Data Input Center',
+    icon: (
+      <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+    ),
+  },
+  {
     to: '/',
     label: 'Dashboard',
     end: true,
@@ -129,6 +136,11 @@ export function Sidebar({ apiHealth, isOpen = false, onClose }: SidebarProps) {
         )}
       </div>
 
+      <NavLink to="/data-input" onClick={() => onClose?.()} className="mx-3 mt-3 rounded-xl bg-portflow-amber px-3 py-2.5 text-xs font-semibold text-portflow-ink hover:bg-portflow-amberHover transition-colors">
+        <span className="block">Demo + planning inputs</span>
+        <span className="block font-normal text-[11px] mt-0.5">Synthetic starter data · add your own schedule</span>
+      </NavLink>
+
       {/* ── Navigation Links ────────────────────────────────────────────────── */}
       <nav className="flex-1 py-5 px-3 space-y-1.5 overflow-y-auto">
         {NAV_LINKS.map(({ to, label, displayLabel, end, icon }) => (
@@ -154,15 +166,6 @@ export function Sidebar({ apiHealth, isOpen = false, onClose }: SidebarProps) {
 
       {/* ── Bottom Section ──────────────────────────────────────────────────── */}
       <div className="p-4 border-t border-[#2D4A73]/40 space-y-3 bg-black/10">
-        {/* Synthetic Demo Data Indicator */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs">
-          <span className="relative flex h-2 w-2 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-portflow-amber opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-portflow-amber" />
-          </span>
-          <span className="font-medium text-slate-200">Synthetic Demo Data</span>
-        </div>
-
         {/* Disclaimer Link */}
         <button
           type="button"
@@ -187,7 +190,7 @@ export function Sidebar({ apiHealth, isOpen = false, onClose }: SidebarProps) {
   return (
     <>
       {/* Desktop Persistent Sidebar (260px, medium dark navy) */}
-      <aside className="hidden md:flex flex-col w-[260px] min-h-screen bg-[#1D2E49] border-r border-[#2D4A73]/40 shrink-0 shadow-sidebar z-20">
+      <aside className="hidden md:flex flex-col w-[260px] h-screen sticky top-0 bg-[#1D2E49] border-r border-[#2D4A73]/40 shrink-0 shadow-sidebar z-20">
         {navContent}
       </aside>
 
