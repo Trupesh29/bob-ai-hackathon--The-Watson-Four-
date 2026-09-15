@@ -376,6 +376,7 @@ def optimize(
                             service_minutes=svc,
                             waiting_minutes=max(0, wait_min),
                             priority=v.priority,
+                            draft_m=v.draft_m,
                         )
                     )
                     break

@@ -78,4 +78,4 @@ def post_copilot_ask(
             },
         )
 
-    return copilot_ask(ctx, question=body.question)
+    return copilot_ask(ctx, question=body.question, plan_context=body.plan_context)

@@ -137,8 +137,13 @@ export function Sidebar({ apiHealth, isOpen = false, onClose }: SidebarProps) {
       </div>
 
       <NavLink to="/data-input" onClick={() => onClose?.()} className="mx-3 mt-3 rounded-xl bg-portflow-amber px-3 py-2.5 text-xs font-semibold text-portflow-ink hover:bg-portflow-amberHover transition-colors">
-        <span className="block">Demo + planning inputs</span>
-        <span className="block font-normal text-[11px] mt-0.5">Synthetic starter data · add your own schedule</span>
+        <div className="flex items-center justify-between">
+          <span>Data Input Center</span>
+          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-black/15 text-portflow-ink">Active Dataset</span>
+        </div>
+        <span className="block font-normal text-[11px] mt-0.5 truncate">
+          {typeof window !== 'undefined' ? localStorage.getItem('portflow_dataset_label') ?? 'Synthetic starter data' : 'Synthetic starter data'}
+        </span>
       </NavLink>
 
       {/* ── Navigation Links ────────────────────────────────────────────────── */}

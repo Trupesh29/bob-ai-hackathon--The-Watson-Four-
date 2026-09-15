@@ -43,6 +43,16 @@ export default function MapPage() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
 
+  // Load last optimizer assignments from localStorage
+  const storedAssignments = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('portflow_last_plan')
+      if (!raw) return []
+      const parsed = JSON.parse(raw) as { assignments?: import('../types/api').BerthAssignment[] }
+      return parsed.assignments ?? []
+    } catch { return [] }
+  }, [])
+
   useEffect(() => {
     setStatus('loading')
     setError(null)
@@ -162,6 +172,11 @@ export default function MapPage() {
             <div className="card-main bg-[#FAF9F6] p-6 flex flex-col h-[500px]">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="section-title">Quayside Berth Schematic</h2>
+                {storedAssignments.length > 0 && (
+                  <span className="text-xs font-semibold bg-[#FFF8E8] text-[#B97710] border border-[#D99119]/40 px-3 py-1 rounded-xl">
+                    📋 {storedAssignments.length} assignments from optimizer
+                  </span>
+                )}
               </div>
 
               {/* Embedded Berth Layout Component */}
@@ -170,6 +185,7 @@ export default function MapPage() {
                   berths={berths}
                   highRiskBerthCodes={highRiskBerthCodes}
                   criticalBerthCodes={criticalBerthCodes}
+                  assignments={storedAssignments}
                 />
               </div>
             </div>

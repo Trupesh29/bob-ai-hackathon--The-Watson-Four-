@@ -1,0 +1,25 @@
+﻿vessel_name,imo_number,operator_name,capacity_teu,length_m,beam_m,draft_m,eta_offset_hours,expected_containers,priority,cargo_type
+MV FALKERMERE TITAN,IMO9910001,Falkermere Maritime,14000,366,51,14.5,1,3800,1,containerised
+MV NORTHERN COLOSSUS,IMO9910002,Nordic Ocean Lines,12500,350,48,14.2,3,3600,1,containerised
+MV HARGROVE SWIFT,IMO9910003,Hargrove Shipping,8500,290,40,12.1,2,2200,2,containerised
+MV ATLANTIC BLAZE,IMO9910004,Atlantic Carriers,9200,310,42,12.8,5,2500,2,containerised
+MV STEEL MERIDIAN,IMO9910005,Global Steel Freight,6800,260,38,10.5,6,1800,3,bulk
+MV OCEAN PIONEER,IMO9910006,Pacific Routes Ltd,7200,275,39,11.2,8,1950,3,containerised
+MV FALKERMERE IRIS,IMO9910007,Falkermere Maritime,5500,230,35,9.8,10,1400,2,containerised
+MV SUNRISE CARRIER,IMO9910008,Sunrise Shipping Co,4800,215,33,9.2,12,1250,3,containerised
+MV PORT VANGUARD,IMO9910009,Vanguard Marine,6100,245,36,10.1,14,1600,3,containerised
+MV TIDAL EXPRESS,IMO9910010,Express Ocean Ltd,7800,280,40,11.8,16,2050,2,containerised
+MV CORAL PASSAGE,IMO9910011,Coral Sea Lines,3200,185,29,8.1,18,820,4,containerised
+MV SILVER ARROW,IMO9910012,Silver Maritime,5900,242,36,10.3,20,1560,3,containerised
+MV GRANITE PEAK,IMO9910013,Peak Cargo Group,8800,295,41,12.5,22,2350,2,bulk
+MV WESTSHORE QUEEN,IMO9910014,Westshore Shipping,4500,210,32,8.9,24,1180,4,containerised
+MV IRONCLAD TRADER,IMO9910015,Ironclad Maritime,6600,255,37,10.8,26,1720,3,containerised
+MV BLUE HORIZON,IMO9910016,Horizon Cargo Ltd,9400,315,43,13.1,28,2480,2,containerised
+MV MERIDIAN STORM,IMO9910017,Meridian Ocean Co,3800,195,30,8.4,30,980,4,containerised
+MV NORTHERN STAR,IMO9910018,Nordic Ocean Lines,7500,278,40,11.6,34,2000,3,containerised
+MV COASTAL EAGLE,IMO9910019,Eagle Maritime Corp,5200,225,34,9.5,38,1350,3,containerised
+MV CARGO MASTER,IMO9910020,Master Freight Lines,6300,250,37,10.4,42,1650,4,containerised
+MV PACIFIC HERALD,IMO9910021,Pacific Routes Ltd,8200,285,41,12.2,46,2180,2,containerised
+MV DELTA CARRIER,IMO9910022,Delta Ocean Freight,4100,200,31,8.7,50,1060,4,containerised
+MV IRON DUCHESS,IMO9910023,Iron Sea Lines,7100,272,39,11.4,55,1900,3,containerised
+MV CREST PIONEER,IMO9910024,Pioneer Maritime,5700,238,35,9.9,62,1480,5,containerised

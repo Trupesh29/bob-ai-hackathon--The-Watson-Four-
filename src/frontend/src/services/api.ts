@@ -14,6 +14,8 @@ import type {
   WaitingMode,
   CopilotAskRequest,
   CopilotAskResponse,
+  CSVImportResponse,
+  DisruptionScenarioResponse,
   DashboardCongestionResponse,
   DashboardSummaryResponse,
   BerthsResponse,
@@ -154,7 +156,7 @@ export function fetchAlternateRouting(
 export function fetchCopilotAsk(
   req: CopilotAskRequest,
 ): Promise<CopilotAskResponse> {
-  const url = new URL(`${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'}/copilot/ask`, window.location.origin)
+  const url = new URL(`${BASE_URL}/copilot/ask`, window.location.origin)
   return fetch(url.toString(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -172,7 +174,7 @@ export function fetchCopilotAsk(
 export function fetchOperationsPlan(
   req: import('../types/api').OperationsPlanRequest = {},
 ): Promise<import('../types/api').OperationsPlanResponse> {
-  const url = new URL(`${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'}/operations-plan`, window.location.origin)
+  const url = new URL(`${BASE_URL}/operations-plan`, window.location.origin)
   return fetch(url.toString(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -187,8 +189,10 @@ export function fetchOperationsPlan(
   })
 }
 
+// ── Write helpers ─────────────────────────────────────────────────────────────
+
 async function writeApi<T>(path: string, method: 'POST' | 'PATCH', body: unknown): Promise<T> {
-  const url = new URL(`${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'}${path}`, window.location.origin)
+  const url = new URL(`${BASE_URL}${path}`, window.location.origin)
   const response = await fetch(url.toString(), {
     method,
     headers: { 'Content-Type': 'application/json' },
@@ -214,11 +218,54 @@ export function updateResourceStatus(
   return writeApi(`/data-input/${resource}/${encodeURIComponent(resourceId)}/status`, 'PATCH', { status })
 }
 
+export async function uploadVesselScheduleCSV(
+  file: File,
+  portCode: string = DEFAULT_PORT_CODE,
+): Promise<CSVImportResponse> {
+  const url = new URL(`${BASE_URL}/data-input/vessel-schedules/csv`, window.location.origin)
+  url.searchParams.set('port_code', portCode)
+  const form = new FormData()
+  form.append('file', file)
+  const resp = await fetch(url.toString(), { method: 'POST', body: form })
+  if (!resp.ok) {
+    let body: unknown
+    try { body = await resp.json() } catch { body = { detail: resp.statusText } }
+    throw new ApiRequestError(resp.status, body, `API ${resp.status}: ${resp.statusText}`)
+  }
+  return resp.json() as Promise<CSVImportResponse>
+}
+
+export async function downloadCSVTemplate(): Promise<void> {
+  const url = new URL(`${BASE_URL}/data-input/vessel-schedules/csv-template`, window.location.origin)
+  const resp = await fetch(url.toString())
+  if (!resp.ok) throw new Error('Failed to download template')
+  const blob = await resp.blob()
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'portflow_vessel_schedule_template.csv'
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+export async function loadDemoScenario(
+  portCode: string = DEFAULT_PORT_CODE,
+): Promise<DisruptionScenarioResponse> {
+  const url = new URL(`${BASE_URL}/data-input/load-demo-scenario`, window.location.origin)
+  url.searchParams.set('port_code', portCode)
+  const resp = await fetch(url.toString(), { method: 'POST' })
+  if (!resp.ok) {
+    let body: unknown
+    try { body = await resp.json() } catch { body = { detail: resp.statusText } }
+    throw new ApiRequestError(resp.status, body, `API ${resp.status}: ${resp.statusText}`)
+  }
+  return resp.json() as Promise<DisruptionScenarioResponse>
+}
+
 export function approveOperationsPlan(
   planId: string,
 ): Promise<import('../types/api').OperationsPlanApprovalResponse> {
   const url = new URL(
-    `${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'}/operations-plan/${encodeURIComponent(planId)}/approve`,
+    `${BASE_URL}/operations-plan/${encodeURIComponent(planId)}/approve`,
     window.location.origin,
   )
   return fetch(url.toString(), {

@@ -268,11 +268,16 @@ def _waiting_context(db: Session, port_code: str, scenario: str = "baseline") ->
 
 # ── Rules fallback ────────────────────────────────────────────────────────────
 
-def _rules_fallback(ctx: CopilotContextSnapshot, question: str) -> str:
+def _rules_fallback(
+    ctx: CopilotContextSnapshot,
+    question: str,
+    plan_context: Optional[object] = None,
+) -> str:
     """
     Generate a deterministic plain-language explanation from structured context.
 
     Answers only from supplied context. Never invents facts.
+    If plan_context is supplied, incorporates optimizer plan results.
     """
     risk = ctx.peak_risk_level.upper()
     risk_pct = ctx.peak_congestion_risk_pct
@@ -282,17 +287,30 @@ def _rules_fallback(ctx: CopilotContextSnapshot, question: str) -> str:
     is_risk_question = any(word in q for word in ("congestion", "risk", "why", "busy", "queue"))
     is_routing_question = any(word in q for word in ("route", "routing", "divert", "alternate", "other port"))
     is_resource_question = any(word in q for word in ("berth", "crane", "resource", "capacity", "maintenance"))
-    is_plan_question = any(word in q for word in ("plan", "optim", "schedule", "recommend"))
+    is_plan_question = any(word in q for word in ("plan", "optim", "schedule", "recommend", "saved", "fifo"))
 
     lines = [
         f"**Port:** {ctx.port_name} ({ctx.port_code})  |  "
         f"**Scenario:** {ctx.scenario}  |  "
-        f"⚠️ Demo starter data and local planning inputs only.",
+        f"⚠️ Synthetic demo starter data and local planning inputs only.",
         "",
     ]
 
     # Answer the operator's subject first, then provide enough context to audit it.
-    if is_wait_question and ctx.top_waiting_vessel:
+    if is_plan_question and plan_context is not None:
+        pc = plan_context
+        lines += [
+            "**Optimizer plan answer:**",
+            f"The last optimizer run used the **{pc.scenario}** scenario and saved "
+            f"**{pc.wait_saved_hours:.1f} hours** of vessel waiting time vs FIFO baseline.",
+        ]
+        if pc.top_vessel:
+            lines.append(
+                f"The vessel with the longest assigned wait was **{pc.top_vessel}**."
+            )
+        if pc.assignments_summary:
+            lines.append(f"\nSummary: {pc.assignments_summary[:400]}")
+    elif is_wait_question and ctx.top_waiting_vessel:
         lines += [
             "**Waiting-time answer:**",
             f"{ctx.top_waiting_vessel} has the highest current estimated wait: "
@@ -311,7 +329,7 @@ def _rules_fallback(ctx: CopilotContextSnapshot, question: str) -> str:
     elif is_plan_question:
         lines += [
             "**Planning answer:**",
-            "Use Optimizer after you save vessel or resource changes. It creates a new CP-SAT berth and crane proposal; review it in Operations Plan before approval.",
+            "No optimizer plan is loaded yet. Run the Optimizer Studio first, then return here for plan-specific answers.",
         ]
     else:
         lines += [
@@ -519,10 +537,11 @@ def _ibm_bob_ask(
 def copilot_ask(
     ctx: CopilotContextSnapshot,
     question: str,
+    plan_context: Optional[object] = None,
 ) -> CopilotAskResponse:
     """
     Route the question to IBM Bob or rules_fallback based on configuration.
-
+    plan_context is passed through to the rules_fallback for plan-aware answers.
     Never logs or returns secret values.
     """
     cfg = _copilot_settings()
@@ -554,7 +573,7 @@ def copilot_ask(
             logger.warning("IBM Bob unavailable (%s) — falling back to rules", exc)
 
     # Rules fallback (always available)
-    answer = _rules_fallback(ctx, question)
+    answer = _rules_fallback(ctx, question, plan_context=plan_context)
     return CopilotAskResponse(
         answer=answer,
         method="rules_fallback",

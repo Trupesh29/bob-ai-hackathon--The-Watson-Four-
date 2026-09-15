@@ -12,6 +12,15 @@ from pydantic import BaseModel, Field
 
 # ── Request ───────────────────────────────────────────────────────────────────
 
+class PlanContext(BaseModel):
+    """Optimizer plan context passed from frontend for plan-specific answers."""
+    plan_id: str = Field(description="UUID of the optimizer plan")
+    scenario: str = Field(description="Scenario used in the plan")
+    top_vessel: Optional[str] = Field(default=None, description="Vessel with highest waiting minutes")
+    wait_saved_hours: float = Field(default=0.0, description="Hours saved vs FIFO baseline")
+    assignments_summary: str = Field(default="", description="Plain-text summary of assignments")
+
+
 class CopilotAskRequest(BaseModel):
     """Request body for POST /api/v1/copilot/ask."""
 
@@ -27,6 +36,10 @@ class CopilotAskRequest(BaseModel):
     scenario: str = Field(
         default="baseline",
         description="Scenario to use when gathering context (baseline | arrival_surge | ...)",
+    )
+    plan_context: Optional[PlanContext] = Field(
+        default=None,
+        description="Optional plan context from the last optimizer run, for plan-grounded answers",
     )
 
 

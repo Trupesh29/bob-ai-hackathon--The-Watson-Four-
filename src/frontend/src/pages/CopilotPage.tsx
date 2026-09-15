@@ -1,12 +1,13 @@
 /**
- * PortFlow AI — Copilot Page (Standalone AI Copilot Terminal)
+ * PortFlow AI — Copilot Page
  *
- * Full-featured conversational AI terminal for port operations analysis.
+ * Conversational assistant grounded in active plan and port data.
+ * Dynamic quick prompts reference actual vessel names from last optimizer run.
  */
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { fetchCopilotAsk, DEFAULT_PORT_CODE, ApiRequestError } from '../services/api'
-import type { CopilotAskResponse, ScenarioId, CopilotContextSnapshot } from '../types/api'
+import type { CopilotAskResponse, ScenarioId, CopilotContextSnapshot, PlanContext } from '../types/api'
 
 interface ChatMessage {
   id: string
@@ -17,12 +18,14 @@ interface ChatMessage {
   context?: CopilotContextSnapshot
 }
 
-const QUICK_PROMPTS = [
-  'Why is congestion high tomorrow?',
-  'Which vessel has the highest predicted wait?',
-  'What does the optimizer recommend?',
-  'Explain the active plan.',
-]
+interface StoredPlan {
+  plan_id: string
+  scenario: string
+  top_vessel: string | null
+  wait_saved_hours: number
+  assignments_summary: string
+  timestamp: string
+}
 
 const SCENARIOS: { id: ScenarioId; label: string }[] = [
   { id: 'baseline', label: 'Baseline' },
@@ -40,14 +43,46 @@ export default function CopilotPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [inspectContext, setInspectContext] = useState<CopilotContextSnapshot | null>(null)
 
+  // Load last optimizer plan from localStorage for plan-grounded prompts
+  const lastPlan = useMemo<StoredPlan | null>(() => {
+    try {
+      const raw = localStorage.getItem('portflow_last_plan')
+      return raw ? (JSON.parse(raw) as StoredPlan) : null
+    } catch { return null }
+  }, [])
+
+  const planContext = useMemo<PlanContext | null>(() => {
+    if (!lastPlan) return null
+    return {
+      plan_id: lastPlan.plan_id,
+      scenario: lastPlan.scenario,
+      top_vessel: lastPlan.top_vessel,
+      wait_saved_hours: lastPlan.wait_saved_hours,
+      assignments_summary: lastPlan.assignments_summary,
+    }
+  }, [lastPlan])
+
+  const quickPrompts = useMemo(() => {
+    return [
+      'What does the optimizer recommend?',
+      lastPlan?.top_vessel
+        ? `Why did ${lastPlan.top_vessel} have the longest wait in the plan?`
+        : 'Which vessel has the highest predicted wait?',
+      'Why is congestion high in the next 24 hours?',
+      'What should the port do about high-risk vessels?',
+      'How many cranes are operational right now?',
+    ]
+  }, [lastPlan])
+
+  const welcomeMessage = lastPlan
+    ? `Hello! I am IBM Bob, PortFlow AI Operations Copilot for Port **${portCode}**.\n\nI have context from your last optimizer run (${lastPlan.scenario} scenario · ${lastPlan.wait_saved_hours}h saved vs FIFO). Try the plan-specific questions below.\n\nAll answers are derived from your planning database — no invented metrics.`
+    : `Hello! I am IBM Bob, PortFlow AI Operations Copilot for Port **${portCode}**.\n\nI analyze berth occupancy, vessel arrivals, waiting times, and routing options. Run the **Optimizer** first for plan-specific answers.\n\nSelect a question below or type your own.`
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content:
-        `Hello! I am IBM Bob, your PortFlow AI Operations Copilot for Port **${portCode}**.\n\n` +
-        `I analyze real-time berth occupancy, vessel arrivals, waiting times, and routing options to provide clear operational explanations and recommendations.\n\n` +
-        `Select a quick query below or type your operational question.`,
+      content: welcomeMessage,
       timestamp: new Date(),
       method: 'rules_fallback',
     },
@@ -81,6 +116,7 @@ export default function CopilotPage() {
         port_code: portCode,
         question: trimmed,
         scenario,
+        ...(planContext ? { plan_context: planContext } : {}),
       })
 
       const assistantMsg: ChatMessage = {
@@ -128,14 +164,26 @@ export default function CopilotPage() {
           <h1 className="page-title flex items-center gap-2">
             IBM Bob Copilot
             <span className="badge-copilot">AI</span>
+            {lastPlan && (
+              <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200">
+                Plan loaded ✓
+              </span>
+            )}
           </h1>
           <p className="body-text mt-1 max-w-2xl">
-            Natural-language operational reasoning and bottleneck analysis for Port {portCode}.
+            Natural-language operational reasoning for Port {portCode}
+            {lastPlan ? ` · Active plan: ${lastPlan.scenario} scenario · ${lastPlan.wait_saved_hours}h saved` : ' · Run Optimizer to enable plan-specific answers'}.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setMessages([messages[0]])}
+            onClick={() => setMessages([{
+              id: 'welcome',
+              role: 'assistant',
+              content: welcomeMessage,
+              timestamp: new Date(),
+              method: 'rules_fallback',
+            }])}
             className="text-sm font-medium text-[#7656B8] hover:text-[#5D4291] bg-[#F1ECFB] hover:bg-[#E5DBF8] px-4 py-2 rounded-xl transition-colors"
           >
             Clear History
@@ -145,7 +193,7 @@ export default function CopilotPage() {
 
       {/* Scenario selector */}
       <div className="flex items-center gap-3 flex-wrap bg-white border border-[#E7DED4] p-4 rounded-xl shadow-sm">
-        <span className="text-sm font-bold text-[#231F20]">Active Scenario:</span>
+        <span className="text-sm font-bold text-[#231F20]">Context Scenario:</span>
         {SCENARIOS.map(s => (
           <button
             key={s.id}
@@ -159,11 +207,16 @@ export default function CopilotPage() {
             {s.label}
           </button>
         ))}
+        {lastPlan && (
+          <span className="ml-auto text-xs text-[#6F6761] font-mono">
+            Last plan: {new Date(lastPlan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
       </div>
 
       {/* Main Terminal Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-        
+
         {/* Chat Stream (2 cols) */}
         <div className="lg:col-span-2 flex flex-col h-[700px] card-main bg-[#F7F4EE] overflow-hidden border-[#E7DED4]">
           {/* Messages list */}
@@ -190,24 +243,13 @@ export default function CopilotPage() {
                   </div>
                   {m.role === 'assistant' && (
                     <div className="mt-4 pt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-[#6F6761] border-t border-[#E7DED4] font-medium uppercase tracking-wider">
-                      <span className="flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5 text-[#7656B8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
-                        </svg>
-                        Source: PortFlow API
+                      <span>
+                        Provider: {m.method === 'ibm_bob_llm' || m.method === 'ibm_bob' ? '✓ IBM Bob provider (Watsonx)' : 'PortFlow rules engine (Rules fallback)'}
                       </span>
-                      <span className="flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5 text-[#7656B8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        Method: {m.method === 'ibm_bob_llm' ? 'IBM Watsonx provider' : 'Local PortFlow API'}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5 text-[#7656B8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                        </svg>
-                        Data: Planning database
-                      </span>
+                      <span>Data: Planning database</span>
+                      {planContext && m.id !== 'welcome' && (
+                        <span className="text-green-600">Plan context: ✓ Active</span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -225,7 +267,7 @@ export default function CopilotPage() {
                 </div>
                 <div className="bg-white border-l-4 border-l-[#7656B8] rounded-2xl rounded-tl-sm p-4 text-sm text-[#7656B8] font-medium flex items-center gap-3 shadow-sm">
                   <span className="w-2 h-2 rounded-full bg-[#7656B8] animate-ping" />
-                  Analyzing port state and formulating recommendations…
+                  Thinking… Analyzing port state and formulating recommendations…
                 </div>
               </div>
             )}
@@ -235,12 +277,12 @@ export default function CopilotPage() {
           <div className="p-6 bg-white border-t border-[#E7DED4] space-y-4">
             {/* Quick Prompts */}
             <div className="flex flex-wrap gap-2">
-              {QUICK_PROMPTS.map(p => (
+              {quickPrompts.map(p => (
                 <button
                   key={p}
                   onClick={() => handleAsk(p)}
                   disabled={isLoading}
-                  className="px-4 py-2 text-xs font-semibold bg-[#F1ECFB] text-[#7656B8] rounded-xl hover:bg-[#E5DBF8] transition-colors border border-transparent hover:border-[#7656B8]/30"
+                  className="px-3 py-1.5 text-xs font-semibold bg-[#F1ECFB] text-[#7656B8] rounded-xl hover:bg-[#E5DBF8] transition-colors border border-transparent hover:border-[#7656B8]/30 text-left"
                 >
                   {p}
                 </button>
@@ -261,7 +303,7 @@ export default function CopilotPage() {
                 onKeyDown={e => {
                   if (e.key === 'Enter') handleAsk(inputQuery)
                 }}
-                placeholder="Ask IBM Bob about waiting times or recommendations…"
+                placeholder="Ask IBM Bob about waiting times, the optimizer plan, or recommendations…"
                 className="flex-1 bg-[#F7F4EE] border border-[#E7DED4] rounded-xl px-4 py-3 text-sm text-[#231F20] placeholder-[#6F6761] focus:outline-none focus:ring-2 focus:ring-[#7656B8]/40 focus:bg-white transition-colors"
               />
               <button
@@ -289,51 +331,49 @@ export default function CopilotPage() {
             </div>
 
             <div className="p-5 flex-1 overflow-y-auto">
-              <p className="text-sm text-[#6F6761] leading-relaxed mb-6">
-                IBM Bob operates strictly on structured facts gathered from PortFlow backend services. It does not invent metrics or schedules.
+              <p className="text-sm text-[#6F6761] leading-relaxed mb-4">
+                IBM Bob operates strictly on structured facts from PortFlow backend services. No invented metrics or schedules.
               </p>
+
+              {lastPlan && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 text-xs">
+                  <p className="font-bold text-green-700 mb-1">Active Plan Context</p>
+                  <p className="text-green-600">Scenario: {lastPlan.scenario}</p>
+                  <p className="text-green-600">Saved vs FIFO: {lastPlan.wait_saved_hours}h</p>
+                  {lastPlan.top_vessel && (
+                    <p className="text-green-600">Top vessel: {lastPlan.top_vessel}</p>
+                  )}
+                </div>
+              )}
 
               {inspectContext ? (
                 <div className="space-y-4">
                   <div className="bg-[#F7F4EE] rounded-xl p-4 border border-[#E7DED4] space-y-3 font-mono text-xs">
-                    <div className="flex justify-between border-b border-[#E7DED4] pb-2">
-                      <span className="text-[#6F6761] font-semibold">Port:</span>
-                      <span className="text-[#213657] font-bold">{inspectContext.port_name} ({inspectContext.port_code})</span>
-                    </div>
-                    <div className="flex justify-between border-b border-[#E7DED4] pb-2">
-                      <span className="text-[#6F6761] font-semibold">Scenario:</span>
-                      <span className="text-[#D99119] font-bold">{inspectContext.scenario}</span>
-                    </div>
-                    <div className="flex justify-between border-b border-[#E7DED4] pb-2">
-                      <span className="text-[#6F6761] font-semibold">Peak Risk:</span>
-                      <span className="text-[#C94B43] font-bold">{inspectContext.peak_risk_level.toUpperCase()} ({Math.round(inspectContext.peak_congestion_risk_pct)}%)</span>
-                    </div>
-                    <div className="flex justify-between border-b border-[#E7DED4] pb-2">
-                      <span className="text-[#6F6761] font-semibold">Top Vessel:</span>
-                      <span className="text-[#231F20] font-bold">{inspectContext.top_waiting_vessel ?? 'None'}</span>
-                    </div>
-                    <div className="flex justify-between border-b border-[#E7DED4] pb-2">
-                      <span className="text-[#6F6761] font-semibold">Highest Wait:</span>
-                      <span className="text-[#231F20] font-bold">{inspectContext.top_waiting_hours ? `${inspectContext.top_waiting_hours.toFixed(1)}h` : '0h'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#6F6761] font-semibold">Routing Advice:</span>
-                      <span className={`font-bold ${inspectContext.routing_recommended ? 'text-[#D85F2B]' : 'text-[#2E7D5B]'}`}>
-                        {inspectContext.routing_recommended ? 'Divert' : 'Stay'}
-                      </span>
-                    </div>
+                    {[
+                      ['Port', `${inspectContext.port_name} (${inspectContext.port_code})`],
+                      ['Scenario', inspectContext.scenario],
+                      ['Peak Risk', `${inspectContext.peak_risk_level.toUpperCase()} (${Math.round(inspectContext.peak_congestion_risk_pct)}%)`],
+                      ['Top Vessel', inspectContext.top_waiting_vessel ?? 'None'],
+                      ['Highest Wait', inspectContext.top_waiting_hours ? `${inspectContext.top_waiting_hours.toFixed(1)}h` : '0h'],
+                      ['Routing', inspectContext.routing_recommended ? 'Divert recommended' : 'Stay at port'],
+                    ].map(([k, v]) => (
+                      <div key={k} className="flex justify-between border-b border-[#E7DED4] pb-2 last:border-0 last:pb-0">
+                        <span className="text-[#6F6761] font-semibold">{k}:</span>
+                        <span className="text-[#213657] font-bold text-right">{v}</span>
+                      </div>
+                    ))}
                   </div>
 
                   <details className="text-sm text-[#6F6761] cursor-pointer group">
                     <summary className="font-semibold group-hover:text-[#213657]">View Raw JSON Payload</summary>
-                    <pre className="mt-3 bg-[#231F20] p-4 rounded-xl border border-[#E7DED4] text-xs text-[#E3F3EA] overflow-x-auto font-mono max-h-64 shadow-inner">
+                    <pre className="mt-3 bg-[#231F20] p-4 rounded-xl text-xs text-[#E3F3EA] overflow-x-auto font-mono max-h-64 shadow-inner">
                       {JSON.stringify(inspectContext, null, 2)}
                     </pre>
                   </details>
                 </div>
               ) : (
                 <div className="p-6 bg-[#F7F4EE] rounded-xl border border-[#E7DED4] text-center text-sm text-[#6F6761] font-medium">
-                  Submit a question to IBM Bob to view the backend context payload snapshot.
+                  Submit a question to view the backend context payload.
                 </div>
               )}
             </div>

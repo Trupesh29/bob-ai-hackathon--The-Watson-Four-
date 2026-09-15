@@ -15,7 +15,7 @@ const PAGE_META: Record<string, PageMeta> = {
   },
   '/predictions': {
     title: 'Predictions',
-    subtitle: 'AI-assisted turnaround estimates and congestion risk forecasting',
+    subtitle: 'Operational risk model: waiting-time estimates and congestion risk forecasting',
   },
   '/vessels': {
     title: 'Vessels',
@@ -23,11 +23,11 @@ const PAGE_META: Record<string, PageMeta> = {
   },
   '/data-input': {
     title: 'Data Input Center',
-    subtitle: 'Add vessel schedules and update berth or crane availability',
+    subtitle: 'Import vessel schedules via CSV, load demo scenario, or add records manually',
   },
   '/optimizer': {
-    title: 'Optimizer',
-    subtitle: 'Automated berth scheduling and crane resource allocation engine',
+    title: 'Optimizer Studio',
+    subtitle: 'CP-SAT joint berth & crane allocation — shows before/after vs FIFO baseline',
   },
   '/operations-plan': {
     title: 'Operations Plan',
@@ -35,19 +35,22 @@ const PAGE_META: Record<string, PageMeta> = {
   },
   '/map': {
     title: 'Berth Map',
-    subtitle: 'Geospatial layout, real-time quay allocation, and crane readiness',
+    subtitle: 'Operational berth layout, quay allocation, and crane readiness',
   },
   '/copilot': {
     title: 'IBM Bob Copilot',
-    subtitle: 'Maritime operational assistant for query dispatch and proactive guidance',
+    subtitle: 'Maritime operational assistant grounded in active plan and port data',
   },
 }
 
-/** Top-level shell: sidebar + standardized executive header + main content area. */
+/** Top-level shell: demo banner + sidebar + standardized executive header + main content area. */
 export function Shell() {
   const location = useLocation()
   const apiHealth = useApiHealth()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [demoBannerDismissed, setDemoBannerDismissed] = useState(() =>
+    sessionStorage.getItem('demo_banner_dismissed') === 'true'
+  )
 
   const pageMeta = useMemo(() => {
     return (
@@ -58,13 +61,16 @@ export function Shell() {
     )
   }, [location.pathname])
 
-  // Current UTC time formatted as HH:MM
   const updatedTime = useMemo(() => {
     const now = new Date()
     const hours = String(now.getUTCHours()).padStart(2, '0')
     const minutes = String(now.getUTCMinutes()).padStart(2, '0')
     return `${hours}:${minutes}`
   }, [])
+
+  const datasetLabel = useMemo(() =>
+    localStorage.getItem('portflow_dataset_label') ?? 'Synthetic demo dataset',
+  [])
 
   return (
     <div className="flex min-h-screen bg-portflow-canvas text-portflow-ink font-sans">
@@ -75,7 +81,32 @@ export function Shell() {
       />
 
       <main className="flex-1 flex flex-col min-w-0">
-        {/* ── Standard Executive Header ───────────────────────────────────── */}
+        {/* ── Demo Mode Banner ──────────────────────────────────────────────── */}
+        {!demoBannerDismissed && (
+          <div className="bg-[#213657] text-white text-xs px-4 py-2 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-portflow-amber shrink-0">DEMO MODE</span>
+              <span className="text-white/80">
+                This prototype uses simulated port records.
+                Production path: CSV, database, or port-system API ingestion.
+              </span>
+              <span className="text-white/50">·</span>
+              <span className="text-white/60 font-mono">{datasetLabel}</span>
+            </span>
+            <button
+              onClick={() => {
+                sessionStorage.setItem('demo_banner_dismissed', 'true')
+                setDemoBannerDismissed(true)
+              }}
+              aria-label="Dismiss demo banner"
+              className="text-white/60 hover:text-white transition-colors shrink-0 ml-2 text-base leading-none"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* ── Standard Executive Header ─────────────────────────────────────── */}
         <header className="bg-portflow-surface/90 backdrop-blur-md border-b border-portflow-border px-4 sm:px-8 py-4 sm:py-5 sticky top-0 z-30 shadow-card">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             {/* Page Title & Explanation + Mobile Nav Button */}
@@ -100,16 +131,11 @@ export function Shell() {
               </div>
             </div>
 
-            {/* Metadata Bar: Port, Scenario, Updated Time, API Status */}
+            {/* Metadata Bar: Port, Dataset, Updated Time, API Status */}
             <div className="flex items-center flex-wrap gap-2.5 sm:gap-3 text-xs">
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-portflow-canvas border border-portflow-border text-portflow-ink font-medium">
                 <span className="text-portflow-muted font-normal">Port:</span>
                 <span className="font-semibold text-portflow-navy">FKPFL</span>
-              </div>
-
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-portflow-amberSoft border border-portflow-amber/30 text-portflow-amber font-medium">
-                <span className="text-portflow-amberHover font-normal">Scenario:</span>
-                <span className="font-semibold text-portflow-ink">Select on page</span>
               </div>
 
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-portflow-canvas border border-portflow-border text-portflow-muted">
@@ -132,7 +158,7 @@ export function Shell() {
           </div>
         </header>
 
-        {/* ── Page Content ────────────────────────────────────────────────── */}
+        {/* ── Page Content ──────────────────────────────────────────────────── */}
         <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto min-w-0 max-w-full">
           <Outlet />
         </div>

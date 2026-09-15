@@ -90,6 +90,7 @@ class BerthAssignment:
     service_minutes: int      # Estimated service duration in minutes
     waiting_minutes: int      # start_time - arrival_time in minutes
     priority: int
+    draft_m: float = 0.0      # Vessel draft (m) — used for explanation context
 
 
 @dataclass

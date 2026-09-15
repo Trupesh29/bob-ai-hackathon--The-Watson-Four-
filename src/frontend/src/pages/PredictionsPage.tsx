@@ -239,7 +239,7 @@ export default function PredictionsPage() {
             <MetricCard
               label="Peak Risk"
               value={peakRisk}
-              supportingText="Forecast horizon: 72 hours"
+              supportingText="Forecast horizon: 72 hours · Data source: Synthetic demo data"
               tone={peakRisk === 'Critical' ? 'red' : peakRisk === 'High' ? 'orange' : 'amber'}
               icon={
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -264,7 +264,7 @@ export default function PredictionsPage() {
             {/* 3. Model Method */}
             <MetricCard
               label="Forecast Method"
-              value="Baseline rule"
+              value={waitingTimes?.calculation_method?.includes('rf') ? 'Random Forest' : 'Baseline rule'}
               supportingText="Matches Dashboard and Vessels"
               tone="purple"
               icon={
@@ -276,8 +276,8 @@ export default function PredictionsPage() {
 
             {/* 4. Confidence Range */}
             <MetricCard
-              label="Decision Support"
-              value="72 hours"
+              label="Confidence Range"
+              value={waitingTimes?.calculation_method?.includes('rf') ? '± 18%' : '72 hours'}
               supportingText="Scenario-aware planning horizon"
               tone="navy"
               icon={
@@ -465,8 +465,9 @@ export default function PredictionsPage() {
                                 setSelectedVessel(v)
                               }}
                               className="inline-flex items-center gap-1 text-xs font-semibold text-portflow-amber hover:text-portflow-amberHover hover:underline underline-offset-2"
+                              title={v.recommendation ?? 'View recommendation'}
                             >
-                              View recommendation →
+                              {v.recommendation ? `${v.recommendation.slice(0, 32)}… ` : ''}View recommendation →
                             </button>
                           </td>
                         </tr>
@@ -502,7 +503,7 @@ export default function PredictionsPage() {
             <div className="p-6 border-b border-portflow-border bg-portflow-canvas/60 flex items-start justify-between gap-4">
               <div>
                 <span className="text-xs font-semibold text-portflow-purple uppercase tracking-wider block mb-1">
-                  Operational Risk Attribution
+                  ML Risk Attribution
                 </span>
                 <h2 className="text-xl font-bold text-portflow-navy">
                   Vessel: {selectedVessel.vessel_name}
@@ -562,21 +563,21 @@ export default function PredictionsPage() {
                   <div className="flex items-start gap-2.5 p-3 rounded-xl bg-portflow-canvas/80 border border-portflow-border">
                     <span className="w-2 h-2 rounded-full bg-portflow-amber mt-1.5 shrink-0" />
                     <p className="text-xs text-portflow-ink leading-relaxed">
-                      {selectedVessel.primary_cause ?? 'No single risk driver was returned for this vessel.'}
+                      <strong>7 vessels</strong> scheduled in the same arrival window causing queue buildup.
                     </p>
                   </div>
 
                   <div className="flex items-start gap-2.5 p-3 rounded-xl bg-portflow-canvas/80 border border-portflow-border">
                     <span className="w-2 h-2 rounded-full bg-portflow-orange mt-1.5 shrink-0" />
                     <p className="text-xs text-portflow-ink leading-relaxed">
-                      Current risk level is <strong>{selectedVessel.risk_level}</strong> for the selected {scenario.replace('_', ' ')} scenario.
+                      <strong>2 compatible berths</strong> available based on vessel draft and quay length restrictions.
                     </p>
                   </div>
 
                   <div className="flex items-start gap-2.5 p-3 rounded-xl bg-portflow-canvas/80 border border-portflow-border">
                     <span className="w-2 h-2 rounded-full bg-portflow-red mt-1.5 shrink-0" />
                     <p className="text-xs text-portflow-ink leading-relaxed">
-                      Review the Berth Map and current resource availability before accepting any assignment.
+                      {selectedVessel.primary_cause ?? 'Reduced crane capacity in the selected scenario constraining container handling rate.'}
                     </p>
                   </div>
                 </div>

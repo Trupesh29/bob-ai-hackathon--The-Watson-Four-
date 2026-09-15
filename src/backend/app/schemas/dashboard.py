@@ -243,6 +243,10 @@ class VesselWaitingPrediction(BaseModel):
         default=None,
         description="Top driver of predicted wait (e.g. 'high queue at arrival')"
     )
+    recommendation: Optional[str] = Field(
+        default=None,
+        description="Suggested action for the port supervisor based on predicted delay"
+    )
 
 
 class WaitingTimesResponse(BaseModel):

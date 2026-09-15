@@ -91,7 +91,7 @@ export interface SchedulesResponse {
   is_synthetic: boolean
 }
 
-// ── Supervisor data input ───────────────────────────────────────────────────
+// ── Supervisor data input ────────────────────────────────────────────────────
 
 export interface VesselScheduleCreateRequest {
   port_code: string
@@ -119,6 +119,33 @@ export interface ResourceStatusResponse {
   resource_id: string
   status: string
   message: string
+}
+
+// ── CSV Import ────────────────────────────────────────────────────────────────
+
+export interface CSVImportRowError {
+  row: number
+  imo_number: string | null
+  vessel_name: string | null
+  error: string
+}
+
+export interface CSVImportResponse {
+  imported: number
+  skipped: number
+  errors: CSVImportRowError[]
+  message: string
+  dataset_label: string
+}
+
+// ── Disruption Scenario ───────────────────────────────────────────────────────
+
+export interface DisruptionScenarioResponse {
+  imported: number
+  cranes_set_to_maintenance: number
+  berths_set_to_maintenance: number
+  message: string
+  scenario_label: string
 }
 
 // ── Resources — Berths ───────────────────────────────────────────────────────
@@ -196,6 +223,7 @@ export interface VesselWaitingPrediction {
   is_synthetic: boolean
   limitations: string
   primary_cause: string | null
+  recommendation: string | null
 }
 
 export interface WaitingTimesResponse {
@@ -266,10 +294,19 @@ export interface CopilotContextSnapshot {
   data_source: string
 }
 
+export interface PlanContext {
+  plan_id: string
+  scenario: string
+  top_vessel: string | null
+  wait_saved_hours: number
+  assignments_summary: string
+}
+
 export interface CopilotAskRequest {
   port_code: string
   question: string
   scenario?: string
+  plan_context?: PlanContext
 }
 
 export interface CopilotAskResponse {

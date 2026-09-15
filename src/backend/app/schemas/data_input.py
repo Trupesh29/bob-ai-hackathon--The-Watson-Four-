@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -48,3 +48,35 @@ class ResourceStatusResponse(BaseModel):
     resource_id: str
     status: str
     message: str
+
+
+# ── CSV import schemas ────────────────────────────────────────────────────────
+
+class CSVImportRowError(BaseModel):
+    """One row-level validation failure during CSV import."""
+    row: int = Field(description="1-indexed CSV data row number (excludes header)")
+    imo_number: Optional[str] = None
+    vessel_name: Optional[str] = None
+    error: str
+
+
+class CSVImportResponse(BaseModel):
+    """Result of a CSV bulk vessel-schedule import."""
+    imported: int = Field(description="Number of rows successfully imported")
+    skipped: int = Field(description="Number of rows skipped (duplicate IMO or validation fail)")
+    errors: List[CSVImportRowError] = Field(default_factory=list)
+    message: str
+    dataset_label: str = Field(
+        description="Label shown in the UI to identify the active dataset source",
+    )
+
+
+# ── Demo disruption scenario schema ───────────────────────────────────────────
+
+class DisruptionScenarioResponse(BaseModel):
+    """Result of loading the built-in demo disruption scenario."""
+    imported: int
+    cranes_set_to_maintenance: int
+    berths_set_to_maintenance: int
+    message: str
+    scenario_label: str
